@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Joy Audio Tool — Tải phát âm Oxford</title>
+<style>
+  :root { --brown:#5C4A3A; --beige:#F6F3EE; --accent:#8B6F47; --green:#4C7C5C; --red:#B04A3A; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--beige); color:#333; margin:0; padding:16px; max-width:760px; margin:0 auto; }
+  h1 { color:var(--brown); font-size:22px; text-align:center; }
+  .card { background:#fff; border-radius:12px; padding:16px; margin:12px 0; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  label { font-weight:600; color:var(--brown); display:block; margin:8px 0 4px; }
+  textarea { width:100%; min-height:140px; border:2px solid #ddd; border-radius:10px; padding:10px; font-size:16px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  select, input[type=text] { padding:10px 12px; font-size:16px; border-radius:10px; border:2px solid #ddd; }
+  button { background:var(--brown); color:#fff; border:none; border-radius:24px; padding:12px 24px; font-size:17px; cursor:pointer; }
+  button:disabled { opacity:.5; }
+  button.secondary { background:var(--accent); }
+  #gate input { flex:1; }
+  .word { display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid #eee; font-size:16px; }
+  .word audio { flex:1; height:32px; }
+  .ok { color:var(--green); font-weight:700; } .fail { color:var(--red); }
+  #progress { height:10px; background:#e5ddd2; border-radius:6px; overflow:hidden; margin-top:8px; }
+  #bar { height:100%; width:0%; background:var(--green); }
+  .hint { font-size:14px; color:#777; }
+  #gate { border:2px dashed var(--accent); }
+</style>
+</head>
+<body>
+<h1>🔊 Joy Audio Tool</h1>
+<p style="text-align:center" class="hint">Dán danh sách từ → nghe thử → tải 1 file zip về máy</p>
+
+<div class="card" id="gate">
+  <label>🔑 Mã dùng tháng này (hỏi quản lý để lấy):</label>
+  <div class="row">
+    <input type="text" id="code" placeholder="Ví dụ: JOY-T9" autocomplete="off">
+    <button onclick="unlock()">Mở</button>
+  </div>
+  <p class="hint">Mỗi tháng cô sẽ nhận 1 mã mới trong nhóm.</p>
+</div>
+
+<div id="app" style="display:none">
+  <div class="card">
+    <label>📝 Danh sách từ (mỗi dòng 1 từ hoặc cụm từ):</label>
+    <textarea id="words" placeholder="anchor&#10;grow down&#10;photosynthesis"></textarea>
+    <label>🗣️ Giọng đọc:</label>
+    <div class="row">
+      <select id="accent">
+        <option value="uk">UK – Anh</option>
+        <option value="us">US – Mỹ</option>
+      </select>
+      <button onclick="start()">1️⃣ Tìm phát âm</button>
+      <button class="secondary" id="zipBtn" onclick="downloadZip()" disabled>2️⃣ Tải file zip</button>
+    </div>
+    <div id="progress"><div id="bar"></div></div>
+    <p class="hint" id="status"></p>
+  </div>
+  <div class="card"><div id="list"></div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
