@@ -45,24 +45,34 @@ function variants(w) {
   return out.filter(function (x) { if (seen[x]) return false; seen[x] = 1; return true; });
 }
 function oxfordCandidates(word, accent) {
-  var noSpace = word.replace(/[\s'-]/g, "");
-  if (!noSpace) return [];
   var kind = accent === "uk" ? "uk_pron" : "us_pron";
   var suf = accent === "uk" ? "gb" : "us";
-  var p1 = noSpace[0];
-  var p2 = (noSpace.slice(0, 3) + "___").slice(0, 3);
-  var p3 = noSpace.slice(0, 5);
-  while (p3.length < 5) p3 += "_";
-  var base = "https://www.oxfordlearnersdictionaries.com/media/english/" + kind + "/" + p1 + "/" + p2 + "/" + p3;
+  function baseFor(w) {
+    var noSpace = w.replace(/[\s'-]/g, "");
+    if (!noSpace) return null;
+    var p1 = noSpace[0];
+    var p2 = (noSpace.slice(0, 3) + "___").slice(0, 3);
+    var p3 = noSpace.slice(0, 5);
+    while (p3.length < 5) p3 += "_";
+    return "https://www.oxfordlearnersdictionaries.com/media/english/" + kind + "/" + p1 + "/" + p2 + "/" + p3;
+  }
   var urls = [];
+  var isPhrase = /[\s-]/.test(word);
+  if (isPhrase) {
+    // Cụm từ: file nằm theo từ ĐẦU, tên file là cả cụm nối gạch dưới (vd grow_into_1__gb_1.mp3)
+    var first = word.split(/[\s-]+/)[0];
+    var slug = word.replace(/[\s-]+/g, "_");
+    var b = baseFor(first);
+    if (b) [1, 2].forEach(function (k) {
+      [1, 2, 3].forEach(function (n) { urls.push(b + "/" + slug + "_" + k + "__" + suf + "_" + n + ".mp3"); });
+    });
+    return urls;
+  }
+  var noSpace = word.replace(/[\s'-]/g, "");
+  if (!noSpace) return [];
+  var base = baseFor(word);
   var file = noSpace + "__" + suf + "_";
   [1, 2, 3].forEach(function (n) { urls.push(base + "/" + file + n + ".mp3"); });
-  if (/\s/.test(word)) { // cụm từ dạng "seed_coat_1_gb_1"
-    var slug = word.replace(/\s+/g, "_");
-    [1, 2].forEach(function (k) {
-      [1, 2].forEach(function (n) { urls.push(base + "/" + slug + "_" + k + "__" + suf + "_" + n + ".mp3"); });
-    });
-  }
   return urls;
 }
 function audioOK(url, ms) {
@@ -107,7 +117,8 @@ async function edgeGec() {
 }
 function edgeEscape(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 // Trả về blob URL của file mp3, hoặc null nếu trình duyệt bị chặn (dùng Chrome sẽ bị chặn)
-function edgeSynthesize(text, voice) {
+function edgeSynthesize(text, voice, rate) {
+  rate = rate || "+0%";
   return new Promise(function (resolve) {
     var done = false;
     function fin(v) { if (!done) { done = true; resolve(v); } }
@@ -121,7 +132,7 @@ function edgeSynthesize(text, voice) {
       var chunks = [];
       ws.onopen = function () {
         ws.send("X-Timestamp:" + edgeDateStr() + "\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n{\"context\":{\"synthesis\":{\"audio\":{\"metadataoptions\":{\"sentenceBoundaryEnabled\":\"false\",\"wordBoundaryEnabled\":\"false\"},\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}\r\n");
-        var ssml = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='" + edgeFullVoice(voice) + "'><prosody pitch='+0Hz' rate='+0%' volume='+0%'>" + edgeEscape(text) + "</prosody></voice></speak>";
+        var ssml = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='" + edgeFullVoice(voice) + "'><prosody pitch='+0Hz' rate='" + rate + "' volume='+0%'>" + edgeEscape(text) + "</prosody></voice></speak>";
         var rid = crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : String(Date.now());
         ws.send("X-RequestId:" + rid + "\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:" + edgeDateStr() + "Z\r\nPath:ssml\r\n\r\n" + ssml);
       };
@@ -151,12 +162,14 @@ function edgeSynthesize(text, voice) {
 async function findOne(rawWord, mode) {
   var word = cleanWord(rawWord);
   if (!word) return { word: rawWord, ok: false, note: "từ trống" };
+  var speed = parseFloat(($("speed") || {}).value || "1") || 1;
+  var rateStr = "+" + Math.round((speed - 1) * 100) + "%";
   var useEdgeVoice = mode.indexOf("oxford-") !== 0 ? mode : (mode === "oxford-uk" ? "en-GB-SoniaNeural" : "en-US-AriaNeural");
   var accent = mode === "oxford-us" || /^en-US/i.test(mode) ? "us" : "uk";
-  // Chế độ chọn giọng Edge cụ thể: đọc Edge hết cho đều giọng
+  // Chế độ chọn giọng Edge cụ thể: đọc bằng giọng đó, tốc độ đã chọn
   if (mode.indexOf("oxford-") !== 0) {
-    var eu = await edgeSynthesize(word, mode);
-    if (eu) return { word: rawWord.trim(), ok: true, url: eu, edge: true, blob: true, note: "" };
+    var eu = await edgeSynthesize(word, mode, rateStr);
+    if (eu) return { word: rawWord.trim(), ok: true, url: eu, edge: true, blob: true, voice: mode, rate: rateStr, note: "" };
     return { word: rawWord.trim(), ok: true, url: googleTTS(word, accent), google: true, note: "trình duyệt này chặn giọng Edge, dùng giọng đọc thay thế" };
   }
   var vs = variants(word);
@@ -168,9 +181,9 @@ async function findOne(rawWord, mode) {
       }
     }
   }
-  // Oxford không có (cụm từ, từ hiếm) → thử giọng Edge trước
-  var eu2 = await edgeSynthesize(word, useEdgeVoice);
-  if (eu2) return { word: rawWord.trim(), ok: true, url: eu2, edge: true, blob: true, note: "Oxford không có, đọc bằng giọng Edge" };
+  // Oxford không có (cụm từ, từ hiếm) → thử giọng Edge trước (cùng giọng + tốc độ đã chọn)
+  var eu2 = await edgeSynthesize(word, useEdgeVoice, rateStr);
+  if (eu2) return { word: rawWord.trim(), ok: true, url: eu2, edge: true, blob: true, voice: useEdgeVoice, rate: rateStr, note: "Oxford không có, đọc bằng giọng Edge" };
   // Trình duyệt Chrome chặn Edge → dùng giọng Google đọc thay (vẫn có tiếng)
   return { word: rawWord.trim(), ok: true, url: googleTTS(word, accent), google: true, note: "Oxford không có, dùng giọng đọc thay thế" };
 }
@@ -238,12 +251,11 @@ function playSample(src, btn) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
-// ---- Tải gộp zip (đi qua proxy công cộng, file nào kẹt thì bấm "tải lẻ") ----
+// ---- Tải gộp zip (blob URL tải thẳng, Oxford thử qua Google Translate proxy) ----
 function proxyOf(u) {
-  return [
-    "https://api.cors.lol/?url=" + encodeURIComponent(u),
-    "https://api.allorigins.win/raw?url=" + encodeURIComponent(u)
-  ];
+  // Google Translate proxy chuyển hướng 1 lần rồi trả file, không có ACAO nhưng trình duyệt vẫn cho phép
+  var gtp = "https://www-oxfordlearnersdictionaries-com.translate.goog" + u.replace("https://www.oxfordlearnersdictionaries.com", "") + "?_x_tr_sl=en&_x_tr_tl=fr&_x_tr_hl=en";
+  return [gtp];
 }
 async function fetchBytes(url) {
   if (url.indexOf("blob:") === 0) {

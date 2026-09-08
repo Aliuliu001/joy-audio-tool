@@ -50,21 +50,37 @@
         <option value="oxford-uk">📕 Oxford UK (từ có Oxford, cụm dùng Edge UK)</option>
         <option value="oxford-us">📕 Oxford US (từ có Oxford, cụm dùng Edge US)</option>
         <option value="en-GB-SoniaNeural">👩 Sonia — Nữ UK</option>
+        <option value="en-GB-LibbyNeural">👩 Libby — Nữ UK 2</option>
         <option value="en-GB-RyanNeural">👨 Ryan — Nam UK</option>
         <option value="en-US-AriaNeural">👩 Aria — Nữ US</option>
+        <option value="en-US-EmmaNeural">👩 Emma — Nữ US 2</option>
+        <option value="en-US-JennyNeural">👩 Jenny — Nữ US 3</option>
         <option value="en-US-GuyNeural">👨 Guy — Nam US</option>
-        <option value="en-US-JennyNeural">👩 Jenny — Nữ US 2</option>
+        <option value="en-US-ChristopherNeural">👨 Christopher — Nam US 2</option>
+      </select>
+      <select id="speed">
+        <option value="1">🎚️ Tốc độ: Bình thường</option>
+        <option value="0.25">0.25× (rất chậm)</option>
+        <option value="0.5">0.5×</option>
+        <option value="0.75">0.75×</option>
+        <option value="0.85">0.85×</option>
+        <option value="1.1">1.1×</option>
+        <option value="1.25">1.25×</option>
+        <option value="1.5">1.5× (nhanh)</option>
       </select>
       <button onclick="start()">1️⃣ Tìm phát âm</button>
       <button class="secondary" id="zipBtn" onclick="downloadZip()" disabled>2️⃣ Tải file zip</button>
     </div>
-    <p class="hint">🎧 Nghe thử 5 giọng Edge trước khi chọn:</p>
+    <p class="hint">🎧 Nghe thử 8 giọng Edge trước khi chọn:</p>
     <div class="row" id="samples">
       <button type="button" class="secondary" onclick="playSample('voices/nu-UK-sonia.mp3',this)">👩 Sonia</button>
+      <button type="button" class="secondary" onclick="playSample('voices/nu-UK-libby.mp3',this)">👩 Libby</button>
       <button type="button" class="secondary" onclick="playSample('voices/nam-UK-ryan.mp3',this)">👨 Ryan</button>
       <button type="button" class="secondary" onclick="playSample('voices/nu-US-aria.mp3',this)">👩 Aria</button>
-      <button type="button" class="secondary" onclick="playSample('voices/nam-US-guy.mp3',this)">👨 Guy</button>
+      <button type="button" class="secondary" onclick="playSample('voices/nu-US-emma.mp3',this)">👩 Emma</button>
       <button type="button" class="secondary" onclick="playSample('voices/nu-US-jenny.mp3',this)">👩 Jenny</button>
+      <button type="button" class="secondary" onclick="playSample('voices/nam-US-guy.mp3',this)">👨 Guy</button>
+      <button type="button" class="secondary" onclick="playSample('voices/nam-US-christopher.mp3',this)">👨 Christopher</button>
     </div>
     <div id="progress"><div id="bar"></div></div>
     <p class="hint" id="status"></p>
