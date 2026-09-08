@@ -34,7 +34,7 @@
 <div class="card" id="gate">
   <label>🔑 Mã dùng tháng này (hỏi quản lý để lấy):</label>
   <div class="row">
-    <input type="text" id="code" placeholder="Ví dụ: JOY-T9" autocomplete="off">
+    <input type="text" id="code" placeholder="Ví dụ: 142731" autocomplete="off" inputmode="numeric">
     <button onclick="unlock()">Mở</button>
   </div>
   <p class="hint">Mỗi tháng cô sẽ nhận 1 mã mới trong nhóm.</p>
@@ -44,14 +44,27 @@
   <div class="card">
     <label>📝 Danh sách từ (mỗi dòng 1 từ hoặc cụm từ):</label>
     <textarea id="words" placeholder="anchor&#10;grow down&#10;photosynthesis"></textarea>
-    <label>🗣️ Giọng đọc:</label>
+    <label>🗣️ Giọng đọc cho từ/cụm Oxford KHÔNG có:</label>
     <div class="row">
-      <select id="accent">
-        <option value="uk">UK – Anh</option>
-        <option value="us">US – Mỹ</option>
+      <select id="voice">
+        <option value="oxford-uk">📕 Oxford UK (từ có Oxford, cụm dùng Edge UK)</option>
+        <option value="oxford-us">📕 Oxford US (từ có Oxford, cụm dùng Edge US)</option>
+        <option value="en-GB-SoniaNeural">👩 Sonia — Nữ UK</option>
+        <option value="en-GB-RyanNeural">👨 Ryan — Nam UK</option>
+        <option value="en-US-AriaNeural">👩 Aria — Nữ US</option>
+        <option value="en-US-GuyNeural">👨 Guy — Nam US</option>
+        <option value="en-US-JennyNeural">👩 Jenny — Nữ US 2</option>
       </select>
       <button onclick="start()">1️⃣ Tìm phát âm</button>
       <button class="secondary" id="zipBtn" onclick="downloadZip()" disabled>2️⃣ Tải file zip</button>
+    </div>
+    <p class="hint">🎧 Nghe thử 5 giọng Edge trước khi chọn:</p>
+    <div class="row" id="samples">
+      <button type="button" class="secondary" onclick="playSample('voices/nu-UK-sonia.mp3',this)">👩 Sonia</button>
+      <button type="button" class="secondary" onclick="playSample('voices/nam-UK-ryan.mp3',this)">👨 Ryan</button>
+      <button type="button" class="secondary" onclick="playSample('voices/nu-US-aria.mp3',this)">👩 Aria</button>
+      <button type="button" class="secondary" onclick="playSample('voices/nam-US-guy.mp3',this)">👨 Guy</button>
+      <button type="button" class="secondary" onclick="playSample('voices/nu-US-jenny.mp3',this)">👩 Jenny</button>
     </div>
     <div id="progress"><div id="bar"></div></div>
     <p class="hint" id="status"></p>
