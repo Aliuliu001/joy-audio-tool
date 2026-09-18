@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Joy Audio Tool — Tải phát âm Oxford</title>
+<title>Joy Audio Tool — Download Oxford Pronunciation</title>
 <style>
   :root { --brown:#5C4A3A; --beige:#F6F3EE; --accent:#8B6F47; --green:#4C7C5C; --red:#B04A3A; }
   * { box-sizing:border-box; }
-  body { font-family:-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--beige); color:#333; margin:0; padding:16px; max-width:760px; margin:0 auto; }
+  body { font-family:-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--beige); color:#333; margin:0; padding:16px; max-width:860px; margin:0 auto; }
   h1 { color:var(--brown); font-size:22px; text-align:center; }
   .card { background:#fff; border-radius:12px; padding:16px; margin:12px 0; box-shadow:0 1px 4px rgba(0,0,0,.08); }
   label { font-weight:600; color:var(--brown); display:block; margin:8px 0 4px; }
@@ -15,77 +15,201 @@
   .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   select, input[type=text] { padding:10px 12px; font-size:16px; border-radius:10px; border:2px solid #ddd; }
   button { background:var(--brown); color:#fff; border:none; border-radius:24px; padding:12px 24px; font-size:17px; cursor:pointer; }
-  button:disabled { opacity:.5; }
-  button.secondary { background:var(--accent); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  button.secondary { background:var(--accent); padding:8px 16px; font-size:15px; }
   #gate input { flex:1; }
   .word { display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid #eee; font-size:16px; }
   .word audio { flex:1; height:32px; }
   .ok { color:var(--green); font-weight:700; } .fail { color:var(--red); }
   #progress { height:10px; background:#e5ddd2; border-radius:6px; overflow:hidden; margin-top:8px; }
-  #bar { height:100%; width:0%; background:var(--green); }
-  .hint { font-size:14px; color:#777; }
+  #bar { height:100%; width:0%; background:var(--green); transition:width 0.3s; }
+  .hint { font-size:14px; color:#777; margin-top:4px; }
   #gate { border:2px dashed var(--accent); }
+  .tabs { display:flex; gap:8px; margin-bottom:12px; }
+  .tab { padding:10px 20px; border-radius:8px 8px 0 0; cursor:pointer; background:#ddd; color:#666; font-weight:600; }
+  .tab.active { background:var(--brown); color:#fff; }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+  .cols2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .voice-group h4 { color:var(--brown); margin:0 0 8px; font-size:16px; }
+  .voice-list { display:flex; flex-direction:column; gap:6px; }
+  .slider-wrap { display:flex; align-items:center; gap:12px; margin:8px 0; }
+  .slider-wrap label { margin:0; min-width:80px; }
+  input[type=range] { flex:1; height:8px; border-radius:4px; background:#e5ddd2; outline:none; -webkit-appearance:none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:var(--brown); cursor:pointer; }
+  input[type=range]::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:var(--brown); cursor:pointer; border:none; }
+  .speed-val { min-width:50px; text-align:right; font-weight:600; color:var(--brown); }
+  .mode-box { border:2px solid #ddd; border-radius:10px; padding:12px; margin:8px 0; }
+  .mode-box.active { border-color:var(--brown); background:#faf9f7; }
+  .mode-box h4 { margin:0 0 8px; font-size:15px; color:var(--brown); }
+  .dialogue-roles { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
 </style>
 </head>
 <body>
 <h1>🔊 Joy Audio Tool</h1>
-<p style="text-align:center" class="hint">Dán danh sách từ → nghe thử → tải 1 file zip về máy</p>
+<p style="text-align:center" class="hint">Download Oxford pronunciation & generate dialogues</p>
 
 <div class="card" id="gate">
-  <label>🔑 Mã dùng tháng này (hỏi quản lý để lấy):</label>
+  <label>🔑 Enter activation code for this month:</label>
   <div class="row">
-    <input type="text" id="code" placeholder="Ví dụ: 142731" autocomplete="off" inputmode="numeric">
-    <button onclick="unlock()">Mở</button>
+    <input type="text" id="code" placeholder="e.g. 142731" autocomplete="off" inputmode="numeric">
+    <button onclick="unlock()">Unlock</button>
   </div>
-  <p class="hint">Mỗi tháng cô sẽ nhận 1 mã mới trong nhóm.</p>
+  <p class="hint">You will receive a new code each month in the group.</p>
 </div>
 
 <div id="app" style="display:none">
-  <div class="card">
-    <label>📝 Danh sách từ (mỗi dòng 1 từ hoặc cụm từ):</label>
-    <textarea id="words" placeholder="anchor&#10;grow down&#10;photosynthesis"></textarea>
-    <label>🗣️ Giọng đọc cho từ/cụm Oxford KHÔNG có:</label>
-    <div class="row">
-      <select id="voice">
-        <option value="oxford-uk">📕 Oxford UK (từ có Oxford, cụm dùng Edge UK)</option>
-        <option value="oxford-us">📕 Oxford US (từ có Oxford, cụm dùng Edge US)</option>
-        <option value="en-GB-SoniaNeural">👩 Sonia — Nữ UK</option>
-        <option value="en-GB-LibbyNeural">👩 Libby — Nữ UK 2</option>
-        <option value="en-GB-RyanNeural">👨 Ryan — Nam UK</option>
-        <option value="en-US-AriaNeural">👩 Aria — Nữ US</option>
-        <option value="en-US-EmmaNeural">👩 Emma — Nữ US 2</option>
-        <option value="en-US-JennyNeural">👩 Jenny — Nữ US 3</option>
-        <option value="en-US-GuyNeural">👨 Guy — Nam US</option>
-        <option value="en-US-ChristopherNeural">👨 Christopher — Nam US 2</option>
-      </select>
-      <select id="speed">
-        <option value="1">🎚️ Tốc độ: Bình thường</option>
-        <option value="0.25">0.25× (rất chậm)</option>
-        <option value="0.5">0.5×</option>
-        <option value="0.75">0.75×</option>
-        <option value="0.85">0.85×</option>
-        <option value="1.1">1.1×</option>
-        <option value="1.25">1.25×</option>
-        <option value="1.5">1.5× (nhanh)</option>
-      </select>
-      <button onclick="start()">1️⃣ Tìm phát âm</button>
-      <button class="secondary" id="zipBtn" onclick="downloadZip()" disabled>2️⃣ Tải file zip</button>
-    </div>
-    <p class="hint">🎧 Nghe thử 8 giọng Edge trước khi chọn:</p>
-    <div class="row" id="samples">
-      <button type="button" class="secondary" onclick="playSample('voices/nu-UK-sonia.mp3',this)">👩 Sonia</button>
-      <button type="button" class="secondary" onclick="playSample('voices/nu-UK-libby.mp3',this)">👩 Libby</button>
-      <button type="button" class="secondary" onclick="playSample('voices/nam-UK-ryan.mp3',this)">👨 Ryan</button>
-      <button type="button" class="secondary" onclick="playSample('voices/nu-US-aria.mp3',this)">👩 Aria</button>
-      <button type="button" class="secondary" onclick="playSample('voices/nu-US-emma.mp3',this)">👩 Emma</button>
-      <button type="button" class="secondary" onclick="playSample('voices/nu-US-jenny.mp3',this)">👩 Jenny</button>
-      <button type="button" class="secondary" onclick="playSample('voices/nam-US-guy.mp3',this)">👨 Guy</button>
-      <button type="button" class="secondary" onclick="playSample('voices/nam-US-christopher.mp3',this)">👨 Christopher</button>
-    </div>
-    <div id="progress"><div id="bar"></div></div>
-    <p class="hint" id="status"></p>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(0)">📚 Vocabulary</div>
+    <div class="tab" onclick="switchTab(1)">📝 Paragraph</div>
   </div>
-  <div class="card"><div id="list"></div></div>
+
+  <!-- TAB 1: Vocabulary -->
+  <div class="tab-content active" id="tab0">
+    <div class="card">
+      <label>📝 Word list (one word or phrase per line):</label>
+      <textarea id="words" placeholder="anchor&#10;grow into&#10;photosynthesis"></textarea>
+      
+      <label>🗣️ Voice for non-Oxford words/phrases:</label>
+      <div class="cols2">
+        <div class="voice-group">
+          <h4>🇬🇧 UK</h4>
+          <div class="voice-list">
+            <label><input type="radio" name="voice" value="oxford-uk" checked> 📕 Oxford UK (fallback: Edge)</label>
+            <label><input type="radio" name="voice" value="en-GB-SoniaNeural"> 👩 Sonia</label>
+            <label><input type="radio" name="voice" value="en-GB-LibbyNeural"> 👩 Libby</label>
+            <label><input type="radio" name="voice" value="en-GB-RyanNeural"> 👨 Ryan</label>
+            <label><input type="radio" name="voice" value="en-GB-ThomasNeural"> 👨 Thomas</label>
+          </div>
+        </div>
+        <div class="voice-group">
+          <h4>🇺🇸 US</h4>
+          <div class="voice-list">
+            <label><input type="radio" name="voice" value="oxford-us"> 📕 Oxford US (fallback: Edge)</label>
+            <label><input type="radio" name="voice" value="en-US-AriaNeural"> 👩 Aria</label>
+            <label><input type="radio" name="voice" value="en-US-EmmaNeural"> 👩 Emma</label>
+            <label><input type="radio" name="voice" value="en-US-JennyNeural"> 👩 Jenny</label>
+            <label><input type="radio" name="voice" value="en-US-GuyNeural"> 👨 Guy</label>
+            <label><input type="radio" name="voice" value="en-US-ChristopherNeural"> 👨 Christopher</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="slider-wrap">
+        <label>🎚️ Speed:</label>
+        <input type="range" id="speed" min="0.25" max="1.5" step="0.05" value="1">
+        <span class="speed-val" id="speedVal">1.0×</span>
+      </div>
+
+      <p class="hint">🎧 Preview 9 voices (Yes/No + Wh-question intonation):</p>
+      <div class="cols2">
+        <div>
+          <b>🇬🇧 UK:</b><br>
+          <button type="button" class="secondary" onclick="playPreview('nu-UK-sonia',this)">👩 Sonia</button>
+          <button type="button" class="secondary" onclick="playPreview('nu-UK-libby',this)">👩 Libby</button>
+          <button type="button" class="secondary" onclick="playPreview('nam-UK-ryan',this)">👨 Ryan</button>
+          <button type="button" class="secondary" onclick="playPreview('nam-UK-thomas',this)">👨 Thomas</button>
+        </div>
+        <div>
+          <b>🇺🇸 US:</b><br>
+          <button type="button" class="secondary" onclick="playPreview('nu-US-aria',this)">👩 Aria</button>
+          <button type="button" class="secondary" onclick="playPreview('nu-US-emma',this)">👩 Emma</button>
+          <button type="button" class="secondary" onclick="playPreview('nu-US-jenny',this)">👩 Jenny</button>
+          <button type="button" class="secondary" onclick="playPreview('nam-US-guy',this)">👨 Guy</button>
+          <button type="button" class="secondary" onclick="playPreview('nam-US-christopher',this)">👨 Christopher</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:16px">
+        <button onclick="startVocab()">1️⃣ Find pronunciation</button>
+        <button class="secondary" id="zipBtn" onclick="downloadZip()" disabled>2️⃣ Download zip</button>
+      </div>
+      <div id="progress"><div id="bar"></div></div>
+      <p class="hint" id="status"></p>
+    </div>
+    <div class="card"><div id="list"></div></div>
+  </div>
+
+  <!-- TAB 2: Paragraph -->
+  <div class="tab-content" id="tab1">
+    <div class="card">
+      <label>📝 Paste paragraph or dialogue:</label>
+      <textarea id="paraText" placeholder="Paragraph:&#10;Once upon a time...&#10;&#10;Dialogue:&#10;John: Do you like ice cream?&#10;Sarah: Yes, I love it!"></textarea>
+
+      <div class="mode-box active" id="singleMode">
+        <h4>📄 Single voice (entire paragraph)</h4>
+        <select id="paraVoice" style="width:100%;margin-top:8px">
+          <option value="en-GB-SoniaNeural">👩 Sonia (UK)</option>
+          <option value="en-GB-LibbyNeural">👩 Libby (UK)</option>
+          <option value="en-GB-RyanNeural">👨 Ryan (UK)</option>
+          <option value="en-GB-ThomasNeural">👨 Thomas (UK)</option>
+          <option value="en-US-AriaNeural">👩 Aria (US)</option>
+          <option value="en-US-EmmaNeural">👩 Emma (US)</option>
+          <option value="en-US-JennyNeural">👩 Jenny (US)</option>
+          <option value="en-US-GuyNeural">👨 Guy (US)</option>
+          <option value="en-US-ChristopherNeural">👨 Christopher (US)</option>
+        </select>
+        <div class="slider-wrap">
+          <label>🎚️ Speed:</label>
+          <input type="range" id="paraSpeed" min="0.25" max="1.5" step="0.05" value="1">
+          <span class="speed-val" id="paraSpeedVal">1.0×</span>
+        </div>
+      </div>
+
+      <div class="mode-box" id="dialogueMode" style="display:none">
+        <h4>💬 Dialogue (2 roles detected: <span id="role1Name">Role 1</span> & <span id="role2Name">Role 2</span>)</h4>
+        <div class="dialogue-roles">
+          <div>
+            <label><span id="role1Label">Role 1:</span> Voice</label>
+            <select id="role1Voice" style="width:100%">
+              <option value="en-GB-RyanNeural">👨 Ryan (UK)</option>
+              <option value="en-GB-ThomasNeural">👨 Thomas (UK)</option>
+              <option value="en-US-GuyNeural">👨 Guy (US)</option>
+              <option value="en-US-ChristopherNeural">👨 Christopher (US)</option>
+              <option value="en-GB-SoniaNeural">👩 Sonia (UK)</option>
+              <option value="en-GB-LibbyNeural">👩 Libby (UK)</option>
+              <option value="en-US-AriaNeural">👩 Aria (US)</option>
+              <option value="en-US-EmmaNeural">👩 Emma (US)</option>
+              <option value="en-US-JennyNeural">👩 Jenny (US)</option>
+            </select>
+            <div class="slider-wrap">
+              <label>Speed:</label>
+              <input type="range" id="role1Speed" min="0.25" max="1.5" step="0.05" value="1">
+              <span class="speed-val" id="role1SpeedVal">1.0×</span>
+            </div>
+          </div>
+          <div>
+            <label><span id="role2Label">Role 2:</span> Voice</label>
+            <select id="role2Voice" style="width:100%">
+              <option value="en-GB-SoniaNeural">👩 Sonia (UK)</option>
+              <option value="en-GB-LibbyNeural">👩 Libby (UK)</option>
+              <option value="en-US-AriaNeural">👩 Aria (US)</option>
+              <option value="en-US-EmmaNeural">👩 Emma (US)</option>
+              <option value="en-US-JennyNeural">👩 Jenny (US)</option>
+              <option value="en-GB-RyanNeural">👨 Ryan (UK)</option>
+              <option value="en-GB-ThomasNeural">👨 Thomas (UK)</option>
+              <option value="en-US-GuyNeural">👨 Guy (US)</option>
+              <option value="en-US-ChristopherNeural">👨 Christopher (US)</option>
+            </select>
+            <div class="slider-wrap">
+              <label>Speed:</label>
+              <input type="range" id="role2Speed" min="0.25" max="1.5" step="0.05" value="1">
+              <span class="speed-val" id="role2SpeedVal">1.0×</span>
+            </div>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:8px">💡 Tip: Use <b>Name:</b> format (e.g. John:, Sarah:) for automatic role detection</p>
+      </div>
+
+      <div class="row" style="margin-top:16px">
+        <button onclick="generatePara()">▶ Preview</button>
+        <button class="secondary" id="paraDownBtn" onclick="downloadPara()" disabled>⬇ Download mp3</button>
+      </div>
+      <div id="paraProgress"><div id="paraBar" style="height:10px;width:0%;background:var(--green);border-radius:6px"></div></div>
+      <p class="hint" id="paraStatus"></p>
+      <div id="paraPreview"></div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
