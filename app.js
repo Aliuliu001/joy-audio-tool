@@ -43,7 +43,7 @@ function syncSpeed(sliderId, valId) {
   });
 }
 document.addEventListener("DOMContentLoaded", function () {
-  syncSpeed("speed", "speedVal");
+  // Speed slider removed, keeping DOMContentLoaded for future use
 });
 
 function switchTab(idx) {
@@ -64,6 +64,24 @@ function playPreview(prefix, btn) {
     a2.onended = function () { btn.textContent = btn.textContent.replace("⏸ ", ""); };
   };
   PREVIEW_AUDIO.play();
+}
+
+// ---- Cambridge Dictionary Candidate Finder ----
+function cambridgeCandidates(word, accent) {
+  // Cambridge URL pattern: https://dictionary.cambridge.org/us/media/english/{accent}_pron/{first}/{first+second}/{word}/{word}.mp3
+  var noSpace = word.replace(/[\\s'-]/g, "").toLowerCase();
+  if (!noSpace) return [];
+  var prefix = accent === "us" ? "us" : "uk";
+  var f1 = noSpace[0];
+  var f2 = noSpace.length > 1 ? noSpace.slice(0, 2) : noSpace[0] + noSpace[0];
+  var f3 = noSpace.length > 2 ? noSpace.slice(0, 3) : f2 + noSpace[0];
+  
+  var urls = [];
+  // Try multiple path patterns
+  urls.push("https://dictionary.cambridge.org/us/media/english/" + prefix + "_pron/" + f1 + "/" + f2 + "/" + word + "/" + word + ".mp3");
+  urls.push("https://dictionary.cambridge.org/media/english/" + prefix + "_pron/" + f1 + "/" + f3 + "/" + word + "/" + word + ".mp3");
+  urls.push("https://dictionary.cambridge.org/media/english/" + prefix + "_pron/" + f1 + "/" + f2 + "/" + noSpace + "/" + noSpace + ".mp3");
+  return urls;
 }
 
 // ---- Oxford Dictionary Candidate Finder ----
@@ -151,8 +169,18 @@ async function findOne(rawWord, accent) {
     }
   }
   
-  // Oxford not found → fail
-  return { word: rawWord.trim(), ok: false, note: "not found in Oxford" };
+  // Oxford not found → try Cambridge
+  for (var i = 0; i < vs.length; i++) {
+    var cambCands = cambridgeCandidates(vs[i], accent);
+    for (var j = 0; j < cambCands.length; j++) {
+      if (await audioOK(cambCands[j])) {
+        return { word: rawWord.trim(), ok: true, url: cambCands[j], cambridge: true, note: "Cambridge" + (vs[i] !== word ? ", from \"" + vs[i] + "\"" : "") };
+      }
+    }
+  }
+  
+  // Not found in both → fail
+  return { word: rawWord.trim(), ok: false, note: "not found" };
 }
 
 async function startVocab() {
@@ -183,9 +211,16 @@ async function startVocab() {
   var ws = [];
   for (var k = 0; k < Math.min(CONC, jobs.length); k++) ws.push(worker());
   await Promise.all(ws);
-  RESULTS.forEach(function (r) { if (!r.ok) FINDINGS.fail++; else if (r.oxford) FINDINGS.ok++; });
+  RESULTS.forEach(function (r) { if (!r.ok) FINDINGS.fail++; else FINDINGS.ok++; });
+  var oxfordCount = RESULTS.filter(function (r) { return r.oxford; }).length;
+  var cambridgeCount = RESULTS.filter(function (r) { return r.cambridge; }).length;
   var failedWords = RESULTS.filter(function (r) { return !r.ok; }).map(function (r) { return r.word; });
-  $("status").textContent = "Done: " + FINDINGS.ok + " found in Oxford" + (FINDINGS.fail ? ", " + FINDINGS.fail + " not found: " + failedWords.join(", ") : "") + ".";
+  var msg = "Done: " + FINDINGS.ok + " found";
+  if (oxfordCount > 0) msg += " (" + oxfordCount + " Oxford";
+  if (cambridgeCount > 0) msg += (oxfordCount > 0 ? ", " : " (") + cambridgeCount + " Cambridge)";
+  else if (oxfordCount > 0) msg += ")";
+  if (FINDINGS.fail > 0) msg += ", " + FINDINGS.fail + " not found: " + failedWords.join(", ");
+  $("status").textContent = msg + ".";
   $("zipBtn").disabled = !RESULTS.some(function (r) { return r && r.ok; });
   btn.disabled = false;
 }
