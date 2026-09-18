@@ -1,6 +1,6 @@
-// Joy Audio Tool — Download Oxford pronunciation & generate dialogues (Web Speech API)
+// Joy Audio Tool — Download Oxford pronunciation & generate dialogues (StreamElements TTS API - no WS block)
 var RESULTS = [];
-var FINDINGS = { ok: 0, google: 0, fail: 0 };
+var FINDINGS = { ok: 0, edge: 0, google: 0, fail: 0 };
 var PARA_BLOB = null;
 var PREVIEW_AUDIO = null;
 
@@ -158,26 +158,27 @@ function googleTTS(word, accent) {
   return "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(word) + "&tl=" + tl + "&client=tw-ob";
 }
 
-// ---- Web Speech API TTS for Paragraph & Dialogue ----
-function browserSynthesize(text, lang, rate) {
-  return new Promise(function (resolve) {
-    if (!('speechSynthesis' in window)) { resolve(null); return; }
-    var utter = new SpeechSynthesisUtterance(text);
-    utter.lang = lang === "uk" ? "en-GB" : "en-US";
-    utter.rate = rate || 1;
-    
-    // Sử dụng MediaRecorder ghi âm lại SpeechSynthesis (hỗ trợ trên Chrome/Edge)
-    if (!window.AudioContext && !window.webkitAudioContext) {
-      // Nếu không hỗ trợ ghi âm, chỉ đọc trực tiếp
-      window.speechSynthesis.speak(utter);
-      resolve(null);
-      return;
-    }
-    
-    window.speechSynthesis.speak(utter);
-    // Tạm thời trả về speech trực tiếp cho Web Audio preview
-    resolve({ speak: function() { window.speechSynthesis.speak(utter); } });
-  });
+// ---- StreamElements TTS API for Paragraph/Dialogue (No CORS/WS block, outputs MP3) ----
+// Map Joy Voice IDs to StreamElements / Amazon Polly voices
+function getSEVoice(voiceId) {
+  var map = {
+    "en-GB-SoniaNeural": "Emma",
+    "en-GB-LibbyNeural": "Amy",
+    "en-GB-RyanNeural": "Brian",
+    "en-GB-ThomasNeural": "Arthur",
+    "en-US-AriaNeural": "Joanna",
+    "en-US-EmmaNeural": "Kendra",
+    "en-US-JennyNeural": "Salli",
+    "en-US-GuyNeural": "Joey",
+    "en-US-ChristopherNeural": "Matthew"
+  };
+  return map[voiceId] || "Brian";
+}
+
+function seSynthesize(text, voiceId) {
+  var v = getSEVoice(voiceId);
+  var url = "https://api.streamelements.com/kappa/v2/speech?voice=" + encodeURIComponent(v) + "&text=" + encodeURIComponent(text);
+  return url;
 }
 
 // ---- Tab 1: Vocabulary Search ----
@@ -187,8 +188,8 @@ async function findOne(rawWord, mode) {
   var accent = mode === "oxford-us" || /^en-US/i.test(mode) ? "us" : "uk";
   
   if (mode.indexOf("oxford-") !== 0) {
-    // Dùng Google TTS thay thế Edge để đảm bảo 100% chạy trên mọi trình duyệt không bị chặn websocket
-    return { word: rawWord.trim(), ok: true, url: googleTTS(word, accent), google: true, note: "generated voice" };
+    var seUrl = seSynthesize(word, mode);
+    return { word: rawWord.trim(), ok: true, url: seUrl, edge: true, note: "generated voice" };
   }
   
   var vs = variants(word);
@@ -201,7 +202,8 @@ async function findOne(rawWord, mode) {
     }
   }
   
-  return { word: rawWord.trim(), ok: true, url: googleTTS(word, accent), google: true, note: "Oxford not found, using fallback" };
+  var seUrl2 = seSynthesize(word, accent === "uk" ? "en-GB-SoniaNeural" : "en-US-AriaNeural");
+  return { word: rawWord.trim(), ok: true, url: seUrl2, edge: true, note: "Oxford not found, generated voice" };
 }
 
 async function startVocab() {
@@ -232,8 +234,8 @@ async function startVocab() {
   var ws = [];
   for (var k = 0; k < Math.min(CONC, jobs.length); k++) ws.push(worker());
   await Promise.all(ws);
-  RESULTS.forEach(function (r) { if (!r.ok) FINDINGS.fail++; else if (r.oxford) FINDINGS.ok++; else FINDINGS.google++; });
-  $("status").textContent = "Done: " + FINDINGS.ok + " Oxford" + (FINDINGS.google ? ", " + FINDINGS.google + " fallback" : "") + (FINDINGS.fail ? ", " + FINDINGS.fail + " failed" : "") + ".";
+  RESULTS.forEach(function (r) { if (!r.ok) FINDINGS.fail++; else if (r.oxford) FINDINGS.ok++; else FINDINGS.edge++; });
+  $("status").textContent = "Done: " + FINDINGS.ok + " Oxford" + (FINDINGS.edge ? ", " + FINDINGS.edge + " generated" : "") + (FINDINGS.fail ? ", " + FINDINGS.fail + " failed" : "") + ".";
   $("zipBtn").disabled = !RESULTS.some(function (r) { return r && r.ok; });
   btn.disabled = false;
 }
@@ -241,13 +243,13 @@ async function startVocab() {
 function renderRow(r, mode) {
   var div = document.createElement("div");
   div.className = "word";
-  var tag = r.ok ? (r.oxford ? '<span class="ok">✔</span>' : '<span style="color:#B8860B">~</span>') : '<span class="fail">✘</span>';
+  var tag = r.ok ? (r.oxford ? '<span class="ok">✔</span>' : '<span class="ok">♫</span>') : '<span class="fail">✘</span>';
   var inner = tag + "<b>" + escapeHtml(r.word) + "</b>";
   if (r.note) inner += ' <small class="hint">(' + escapeHtml(r.note) + ")</small>";
   if (r.ok) {
     inner += '<audio controls preload="none" src="' + r.url + '"></audio>';
     var dl = r.word.replace(/\s+/g, "_") + ".mp3";
-    inner += ' <a href="' + r.url + '" target="_blank" rel="noopener">download</a>';
+    inner += ' <a href="' + r.url + '" download="' + dl + '">download</a>';
   } else {
     inner += ' <small class="fail">not found</small>';
   }
@@ -256,55 +258,74 @@ function renderRow(r, mode) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
-// ---- Tab 2: Paragraph & Dialogue Generator (Web Speech API Live Playback) ----
-function generatePara() {
+// ---- Tab 2: Paragraph & Dialogue Generator (StreamElements API -> MP3 Blob for preview & download) ----
+async function generatePara() {
   var txt = $("paraText").value.trim();
   if (!txt) { alert("Please enter a paragraph or dialogue."); return; }
   
-  if (!('speechSynthesis' in window)) {
-    alert("Your browser does not support Web Speech API.");
-    return;
-  }
-  
-  window.speechSynthesis.cancel();
-  
   var isDialogue = $("dialogueMode").classList.contains("active");
-  var speed = parseFloat($("paraSpeed").value || "1") || 1;
-  var lang = $("paraVoice").value.indexOf("en-GB") !== -1 ? "uk" : "us";
-  
-  if (!isDialogue) {
-    var utter = new SpeechSynthesisUtterance(txt);
-    utter.rate = speed;
-    utter.lang = lang === "uk" ? "en-GB" : "en-US";
-    window.speechSynthesis.speak(utter);
-    $("paraStatus").textContent = "Speaking paragraph...";
-  } else {
-    var lines = txt.split("\n").filter(function (l) { return l.trim(); });
-    var index = 0;
-    
-    function speakNext() {
-      if (index >= lines.length) {
-        $("paraStatus").textContent = "Dialogue playback complete!";
-        return;
+  var btn = document.querySelector("#tab1 button");
+  btn.disabled = true;
+  $("paraDownBtn").disabled = true;
+  $("paraStatus").textContent = "Generating audio (StreamElements API)...";
+  $("paraBar").style.width = "50%";
+  $("paraPreview").innerHTML = "";
+
+  try {
+    var parts = [];
+    if (!isDialogue) {
+      var voice = $("paraVoice").value;
+      var seUrl = seSynthesize(txt, voice);
+      var rb = await fetch(seUrl);
+      if (rb.ok) parts.push(await rb.arrayBuffer());
+    } else {
+      var lines = txt.split("\n").filter(function (l) { return l.trim(); });
+      var role1 = $("role1Name").textContent;
+      var role2 = $("role2Name").textContent;
+      var v1 = $("role1Voice").value;
+      var v2 = $("role2Voice").value;
+
+      for (var i = 0; i < lines.length; i++) {
+        var m = lines[i].match(/^([A-Za-z][A-Za-z0-9\s]*?):\s*(.+)/);
+        if (m && m[2].trim()) {
+          var name = m[1].trim();
+          var sentence = m[2].trim();
+          var v = name === role1 ? v1 : v2;
+          var seUrl = seSynthesize(sentence, v);
+          var rb = await fetch(seUrl);
+          if (rb.ok) parts.push(await rb.arrayBuffer());
+        } else {
+          var seUrl = seSynthesize(lines[i], v1);
+          var rb = await fetch(seUrl);
+          if (rb.ok) parts.push(await rb.arrayBuffer());
+        }
       }
-      var line = lines[index++];
-      var utter = new SpeechSynthesisUtterance(line);
-      utter.rate = speed;
-      utter.lang = lang === "uk" ? "en-GB" : "en-US";
-      utter.onend = function() {
-        speakNext();
-      };
-      window.speechSynthesis.speak(utter);
-      $("paraStatus").textContent = "Speaking line " + index + "/" + lines.length + "...";
     }
-    speakNext();
+
+    $("paraBar").style.width = "100%";
+    if (parts.length) {
+      var combined = new Blob(parts, { type: "audio/mpeg" });
+      PARA_BLOB = URL.createObjectURL(combined);
+      $("paraStatus").textContent = "Generation complete! Ready to download or play.";
+      $("paraDownBtn").disabled = false;
+      $("paraPreview").innerHTML = '<audio controls autoplay src="' + PARA_BLOB + '" style="width:100%;margin-top:12px"></audio>';
+    } else {
+      $("paraStatus").textContent = "Generation failed.";
+    }
+  } catch (e) {
+    $("paraStatus").textContent = "Error: " + e.message;
   }
-  
-  $("paraPreview").innerHTML = '<p class="hint" style="color:var(--green)">🔊 Playing audio via browser speech engine...</p>';
+  btn.disabled = false;
 }
 
-function downloadPara() {
-  alert("For paragraph/dialogue audio download, please use screen recorder or browser audio tool since direct server generation was blocked by Microsoft security.");
+async function downloadPara() {
+  if (!PARA_BLOB) return;
+  var a = document.createElement("a");
+  a.href = PARA_BLOB;
+  a.download = "paragraph-dialogue-audio.mp3";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { a.remove(); }, 3000);
 }
 
 // ---- Zip Download for Vocabulary ----
@@ -313,6 +334,12 @@ function proxyOf(u) {
   return [gtp];
 }
 async function fetchBytes(url) {
+  if (url.indexOf("api.streamelements.com") !== -1) {
+    try {
+      var r = await fetch(url);
+      if (r.ok) return await r.arrayBuffer();
+    } catch (e) {}
+  }
   var tries = proxyOf(url);
   for (var i = 0; i < tries.length; i++) {
     try {
@@ -329,7 +356,7 @@ async function fetchBytes(url) {
 }
 async function downloadZip() {
   var mode = document.querySelector('input[name="voice"]:checked').value;
-  var label = mode.indexOf("oxford-") === 0 ? mode.replace("oxford-", "") : "fallback";
+  var label = mode.indexOf("oxford-") === 0 ? mode.replace("oxford-", "") : "generated";
   var oks = RESULTS.filter(function (r) { return r && r.ok; });
   if (!oks.length) return;
   $("zipBtn").disabled = true;
