@@ -124,26 +124,14 @@ function audioOK(url, ms) {
     a.src = url;
   });
 }
-// ---- StreamElements TTS API (No CORS block, outputs MP3) ----
-// Map Joy Voice IDs to StreamElements / Amazon Polly voices
-function getSEVoice(voiceId) {
-  var map = {
-    "en-GB-SoniaNeural": "Emma",
-    "en-GB-LibbyNeural": "Amy",
-    "en-GB-RyanNeural": "Brian",
-    "en-GB-ThomasNeural": "Arthur",
-    "en-US-AriaNeural": "Joanna",
-    "en-US-EmmaNeural": "Kendra",
-    "en-US-JennyNeural": "Salli",
-    "en-US-GuyNeural": "Joey",
-    "en-US-ChristopherNeural": "Matthew"
-  };
-  return map[voiceId] || "Brian";
-}
-
-function seSynthesize(text, voiceId) {
-  var v = getSEVoice(voiceId);
-  var url = "https://api.streamelements.com/kappa/v2/speech?voice=" + encodeURIComponent(v) + "&text=" + encodeURIComponent(text);
+// ---- Google Translate TTS (free, no API key needed) ----
+function googleTTS(text, voiceId) {
+  // Map voice IDs to Google Translate language codes
+  var tl = "en-US"; // default US
+  if (/^en-GB/i.test(voiceId) || voiceId === "oxford-uk") {
+    tl = "en-GB";
+  }
+  var url = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(text) + "&tl=" + tl + "&client=tw-ob";
   return url;
 }
 
@@ -153,10 +141,10 @@ async function findOne(rawWord, mode) {
   if (!word) return { word: rawWord, ok: false, note: "empty word" };
   var accent = mode === "oxford-us" || /^en-US/i.test(mode) ? "us" : "uk";
   
-  // If user chose a specific TTS voice (not Oxford), generate directly
+  // If user chose a specific TTS voice (not Oxford), generate directly with Google TTS
   if (mode.indexOf("oxford-") !== 0) {
-    var seUrl = seSynthesize(rawWord.trim(), mode);
-    return { word: rawWord.trim(), ok: true, url: seUrl, edge: true, note: "generated voice" };
+    var gUrl = googleTTS(rawWord.trim(), mode);
+    return { word: rawWord.trim(), ok: true, url: gUrl, edge: true, note: "generated voice" };
   }
   
   // Try Oxford dictionary first (single words & common phrases)
@@ -170,10 +158,9 @@ async function findOne(rawWord, mode) {
     }
   }
   
-  // Oxford not found → generate with TTS (handles multi-word phrases, compound words)
-  var voiceId = accent === "uk" ? "en-GB-SoniaNeural" : "en-US-AriaNeural";
-  var seUrl = seSynthesize(rawWord.trim(), voiceId);
-  return { word: rawWord.trim(), ok: true, url: seUrl, edge: true, note: "Oxford not found, generated" };
+  // Oxford not found → generate with Google TTS (handles multi-word phrases, compound words)
+  var gUrl = googleTTS(rawWord.trim(), mode);
+  return { word: rawWord.trim(), ok: true, url: gUrl, edge: true, note: "Oxford not found, generated" };
 }
 
 async function startVocab() {
@@ -234,7 +221,8 @@ function proxyOf(u) {
   return [gtp];
 }
 async function fetchBytes(url) {
-  if (url.indexOf("api.streamelements.com") !== -1) {
+  // Google Translate TTS: fetch directly (CORS allowed with right params)
+  if (url.indexOf("translate.google.com") !== -1) {
     try {
       var r = await fetch(url);
       if (r.ok) return await r.arrayBuffer();
