@@ -154,33 +154,40 @@ function googleTTS(text, voiceId) {
 }
 
 // ---- Tab 1: Vocabulary Search ----
-async function findOne(rawWord, accent) {
+async function findOne(rawWord, accent, source) {
   var word = cleanWord(rawWord);
   if (!word) return { word: rawWord, ok: false, note: "empty word" };
   
-  // Try Oxford dictionary only (single words & common phrases)
+  source = source || "oxford"; // default Oxford
   var vs = variants(word);
-  for (var i = 0; i < vs.length; i++) {
-    var cands = oxfordCandidates(vs[i], accent);
-    for (var j = 0; j < cands.length; j++) {
-      if (await audioOK(cands[j])) {
-        return { word: rawWord.trim(), ok: true, url: cands[j], oxford: true, note: vs[i] !== word ? "from \"" + vs[i] + "\"" : "" };
+  
+  if (source === "oxford") {
+    // Try Oxford dictionary only
+    for (var i = 0; i < vs.length; i++) {
+      var cands = oxfordCandidates(vs[i], accent);
+      for (var j = 0; j < cands.length; j++) {
+        if (await audioOK(cands[j])) {
+          return { word: rawWord.trim(), ok: true, url: cands[j], source: "oxford", note: vs[i] !== word ? "from \"" + vs[i] + "\"" : "" };
+        }
       }
     }
+    return { word: rawWord.trim(), ok: false, note: "not found in Oxford" };
   }
   
-  // Oxford not found → try Cambridge
-  for (var i = 0; i < vs.length; i++) {
-    var cambCands = cambridgeCandidates(vs[i], accent);
-    for (var j = 0; j < cambCands.length; j++) {
-      if (await audioOK(cambCands[j])) {
-        return { word: rawWord.trim(), ok: true, url: cambCands[j], cambridge: true, note: "Cambridge" + (vs[i] !== word ? ", from \"" + vs[i] + "\"" : "") };
+  if (source === "cambridge") {
+    // Try Cambridge dictionary only
+    for (var i = 0; i < vs.length; i++) {
+      var cambCands = cambridgeCandidates(vs[i], accent);
+      for (var j = 0; j < cambCands.length; j++) {
+        if (await audioOK(cambCands[j])) {
+          return { word: rawWord.trim(), ok: true, url: cambCands[j], source: "cambridge", note: vs[i] !== word ? "from \"" + vs[i] + "\"" : "" };
+        }
       }
     }
+    return { word: rawWord.trim(), ok: false, note: "not found in Cambridge" };
   }
   
-  // Not found in both → fail
-  return { word: rawWord.trim(), ok: false, note: "not found" };
+  return { word: rawWord.trim(), ok: false, note: "unknown source" };
 }
 
 async function startVocab() {
@@ -190,12 +197,13 @@ async function startVocab() {
   var btn = document.querySelector("#tab0 button");
   btn.disabled = true;
   $("zipBtn").disabled = true;
+  $("cambridgeBtn").disabled = true;
   $("list").innerHTML = "";
   $("bar").style.width = "0%";
   RESULTS = [];
   FINDINGS = { ok: 0, edge: 0, google: 0, fail: 0 };
   var done = 0;
-  var jobs = lines.map(function (w) { return function () { return findOne(w, accent); }; });
+  var jobs = lines.map(function (w) { return function () { return findOne(w, accent, "oxford"); }; });
   var CONC = 6, idx = 0;
   async function worker() {
     while (idx < jobs.length) {
@@ -212,22 +220,65 @@ async function startVocab() {
   for (var k = 0; k < Math.min(CONC, jobs.length); k++) ws.push(worker());
   await Promise.all(ws);
   RESULTS.forEach(function (r) { if (!r.ok) FINDINGS.fail++; else FINDINGS.ok++; });
-  var oxfordCount = RESULTS.filter(function (r) { return r.oxford; }).length;
-  var cambridgeCount = RESULTS.filter(function (r) { return r.cambridge; }).length;
   var failedWords = RESULTS.filter(function (r) { return !r.ok; }).map(function (r) { return r.word; });
-  var msg = "Done: " + FINDINGS.ok + " found";
+  $("status").textContent = "Done: " + FINDINGS.ok + " found in Oxford" + (FINDINGS.fail ? ", " + FINDINGS.fail + " not found: " + failedWords.join(", ") : "") + ".";
+  $("zipBtn").disabled = !RESULTS.some(function (r) { return r && r.ok; });
+  $("cambridgeBtn").disabled = FINDINGS.fail === 0;
+  btn.disabled = false;
+}
+
+async function searchCambridge() {
+  var accent = document.querySelector('input[name="accent"]:checked').value;
+  var failedIndices = [];
+  RESULTS.forEach(function (r, idx) { if (!r.ok) failedIndices.push(idx); });
+  if (!failedIndices.length) return;
+  
+  var btn = $("cambridgeBtn");
+  btn.disabled = true;
+  $("bar").style.width = "0%";
+  $("status").textContent = "Searching Cambridge for " + failedIndices.length + " words...";
+  
+  var done = 0;
+  var jobs = failedIndices.map(function (idx) {
+    return async function () {
+      var oldResult = RESULTS[idx];
+      var newResult = await findOne(oldResult.word, accent, "cambridge");
+      RESULTS[idx] = newResult;
+      done++;
+      $("bar").style.width = Math.round(done / failedIndices.length * 100) + "%";
+      $("status").textContent = "Searching Cambridge " + done + "/" + failedIndices.length + "...";
+      updateRow(idx, newResult);
+    };
+  });
+  
+  var CONC = 6, idx = 0;
+  async function worker() {
+    while (idx < jobs.length) {
+      var my = idx++;
+      await jobs[my]();
+    }
+  }
+  var ws = [];
+  for (var k = 0; k < Math.min(CONC, jobs.length); k++) ws.push(worker());
+  await Promise.all(ws);
+  
+  var oxfordCount = RESULTS.filter(function (r) { return r.source === "oxford"; }).length;
+  var cambridgeCount = RESULTS.filter(function (r) { return r.source === "cambridge"; }).length;
+  var failedWords = RESULTS.filter(function (r) { return !r.ok; }).map(function (r) { return r.word; });
+  var msg = "Done: " + (oxfordCount + cambridgeCount) + " found";
   if (oxfordCount > 0) msg += " (" + oxfordCount + " Oxford";
   if (cambridgeCount > 0) msg += (oxfordCount > 0 ? ", " : " (") + cambridgeCount + " Cambridge)";
   else if (oxfordCount > 0) msg += ")";
-  if (FINDINGS.fail > 0) msg += ", " + FINDINGS.fail + " not found: " + failedWords.join(", ");
+  if (failedWords.length > 0) msg += ", " + failedWords.length + " not found: " + failedWords.join(", ");
   $("status").textContent = msg + ".";
   $("zipBtn").disabled = !RESULTS.some(function (r) { return r && r.ok; });
-  btn.disabled = false;
+  btn.disabled = failedWords.length === 0;
 }
 
 function renderRow(r, mode) {
   var div = document.createElement("div");
   div.className = "word";
+  div.id = "word-" + RESULTS.indexOf(r);
   var tag = r.ok ? '<span class="ok">✔</span>' : '<span class="fail">✘</span>';
   var inner = tag + "<b>" + escapeHtml(r.word) + "</b>";
   if (r.note) inner += ' <small class="hint">(' + escapeHtml(r.note) + ")</small>";
@@ -240,6 +291,22 @@ function renderRow(r, mode) {
   }
   div.innerHTML = inner;
   $("list").appendChild(div);
+}
+
+function updateRow(idx, r) {
+  var div = document.getElementById("word-" + idx);
+  if (!div) return;
+  var tag = r.ok ? '<span class="ok">✔</span>' : '<span class="fail">✘</span>';
+  var inner = tag + "<b>" + escapeHtml(r.word) + "</b>";
+  if (r.note) inner += ' <small class="hint">(' + escapeHtml(r.note) + ")</small>";
+  if (r.ok) {
+    inner += '<audio controls preload="none" src="' + r.url + '"></audio>';
+    var dl = r.word.replace(/\s+/g, "_") + ".mp3";
+    inner += ' <a href="' + r.url + '" download="' + dl + '">download</a>';
+  } else {
+    inner += ' <small class="fail">not found</small>';
+  }
+  div.innerHTML = inner;
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
