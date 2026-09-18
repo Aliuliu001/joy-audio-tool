@@ -16,29 +16,6 @@ if ('serviceWorker' in navigator) {
 }
 
 function $(id) { return document.getElementById(id); }
-function monthKey() {
-  var d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
-}
-
-function unlock() {
-  var v = $("code").value.trim();
-  var want = (window.MONTH_CODES || {})[monthKey()];
-  if (!want) { alert("No code for this month yet. Please contact the manager."); return; }
-  if (v === want) {
-    $("gate").style.display = "none";
-    $("app").style.display = "block";
-    try { sessionStorage.setItem("joy_audio_ok", monthKey()); } catch (e) {}
-  } else {
-    alert("Incorrect code. Please check again.");
-  }
-}
-try {
-  if (sessionStorage.getItem("joy_audio_ok") === monthKey()) {
-    $("gate").style.display = "none";
-    $("app").style.display = "block";
-  }
-} catch (e) {}
 
 // Speed slider sync
 function syncSpeed(sliderId, valId) {
