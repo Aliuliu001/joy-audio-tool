@@ -1,60 +1,29 @@
-// Service Worker to cache audio files and bypass CORS for zip download
-const CACHE_NAME = 'joy-audio-cache-v1';
+// Service Worker - removed to allow direct fetch with Google Translate proxy
+const CACHE_NAME = 'joy-audio-cache-v2';
 
 self.addEventListener('install', function(event) {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', function(event) {
-  event.waitUntil(self.clients.claim());
-});
-
-self.addEventListener('fetch', function(event) {
-  const url = event.request.url;
-  
-  // Only intercept audio file requests (Oxford, Cambridge)
-  if (url.indexOf('oxfordlearnersdictionaries.com') !== -1 || 
-      url.indexOf('dictionary.cambridge.org') !== -1) {
-    
-    event.respondWith(
-      caches.open(CACHE_NAME).then(function(cache) {
-        return cache.match(event.request).then(function(response) {
-          if (response) {
-            return response;
+  // Clear old cache
+  event.waitUntil(
+    caches.keys().then(function(cacheNames) {
+      return Promise.all(
+        cacheNames.map(function(cacheName) {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
           }
-          
-          // Fetch with no-cors mode
-          return fetch(event.request.url, { mode: 'no-cors' }).then(function(networkResponse) {
-            // Cache for future use
-            cache.put(event.request, networkResponse.clone());
-            return networkResponse;
-          }).catch(function() {
-            // If fetch fails, return empty response
-            return new Response(new Blob(), { status: 200, statusText: 'OK' });
-          });
-        });
-      })
-    );
-  }
+        })
+      );
+    }).then(function() {
+      return self.clients.claim();
+    })
+  );
 });
 
-// Message handler for downloading audio data
-self.addEventListener('message', function(event) {
-  if (event.data.action === 'cacheAudio') {
-    const { url } = event.data;
-    
-    fetch(url, { mode: 'no-cors' })
-      .then(response => {
-        return caches.open(CACHE_NAME).then(cache => {
-          cache.put(url, response.clone());
-          return response.arrayBuffer();
-        });
-      })
-      .then(buffer => {
-        event.ports[0].postMessage({ success: true, buffer: buffer });
-      })
-      .catch(err => {
-        event.ports[0].postMessage({ success: false, error: err.message });
-      });
-  }
+// Do NOT intercept fetch requests - let app.js handle with Google Translate proxy
+// This allows fetchBytes() to properly download audio files for zip
+self.addEventListener('fetch', function(event) {
+  // Pass through - don't intercept
 });
