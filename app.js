@@ -3,6 +3,17 @@ var RESULTS = [];
 var FINDINGS = { ok: 0, edge: 0, google: 0, fail: 0 };
 var PARA_BLOB = null;
 var PREVIEW_AUDIO = null;
+var SW_READY = false;
+
+// Register Service Worker for CORS bypass
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(function(reg) {
+    console.log('Service Worker registered');
+    SW_READY = true;
+  }).catch(function(err) {
+    console.log('Service Worker registration failed:', err);
+  });
+}
 
 function $(id) { return document.getElementById(id); }
 function monthKey() {
@@ -319,12 +330,25 @@ function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { retu
 
 // ---- Zip Download for Vocabulary ----
 async function fetchBytes(url) {
-  // Try direct fetch first (works for most URLs now)
+  // If Service Worker is ready, use it to bypass CORS
+  if (SW_READY && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const buffer = await response.arrayBuffer();
+        if (buffer.byteLength > 500) return buffer;
+      }
+    } catch (e) {
+      console.log('SW fetch failed:', e);
+    }
+  }
+  
+  // Fallback: try direct fetch
   try {
     var r = await fetch(url);
     if (r.ok) {
       var b = await r.arrayBuffer();
-      if (b.byteLength > 500) return b; // Valid audio file
+      if (b.byteLength > 500) return b;
     }
   } catch (e) {}
   
