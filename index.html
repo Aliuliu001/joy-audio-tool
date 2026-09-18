@@ -49,7 +49,16 @@
 <h1>🔊 Joy Audio Tool</h1>
 <p style="text-align:center" class="hint">Download Oxford pronunciation & generate dialogues</p>
 
-<div id="app">
+<div class="card" id="gate">
+  <label>🔑 Nhập mã kích hoạt tháng này:</label>
+  <div class="row">
+    <input type="text" id="code" placeholder="Ví dụ: 142731" autocomplete="off" inputmode="numeric">
+    <button onclick="unlock()">Mở khóa</button>
+  </div>
+  <p class="hint">Mỗi tháng nhập đúng 1 lần là được. Bạn sẽ nhận mã mới mỗi tháng trong nhóm.</p>
+</div>
+
+<div id="app" style="display:none">
   <div class="tabs">
     <div class="tab active" onclick="switchTab(0)">📚 Vocabulary</div>
   </div>
