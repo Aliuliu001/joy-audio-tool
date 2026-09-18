@@ -273,6 +273,11 @@ async function searchCambridge() {
   $("status").textContent = msg + ".";
   $("zipBtn").disabled = !RESULTS.some(function (r) { return r && r.ok; });
   btn.disabled = failedWords.length === 0;
+  
+  // Alert if still have failed words after Cambridge
+  if (failedWords.length > 0) {
+    alert("⚠️ " + failedWords.length + " words not found in both Oxford and Cambridge:\n\n" + failedWords.join(", "));
+  }
 }
 
 function renderRow(r) {
@@ -311,30 +316,45 @@ function updateRow(idx, r) {
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
 // ---- Zip Download for Vocabulary ----
-function proxyOf(u) {
-  var gtp = "https://www-oxfordlearnersdictionaries-com.translate.goog" + u.replace("https://www.oxfordlearnersdictionaries.com", "") + "?_x_tr_sl=en&_x_tr_tl=fr&_x_tr_hl=en";
-  return [gtp];
-}
 async function fetchBytes(url) {
-  // Google Translate TTS: fetch directly (CORS allowed with right params)
-  if (url.indexOf("translate.google.com") !== -1) {
-    try {
-      var r = await fetch(url);
-      if (r.ok) return await r.arrayBuffer();
-    } catch (e) {}
-  }
-  var tries = proxyOf(url);
-  for (var i = 0; i < tries.length; i++) {
+  // Try direct fetch first (works for most URLs now)
+  try {
+    var r = await fetch(url);
+    if (r.ok) {
+      var b = await r.arrayBuffer();
+      if (b.byteLength > 500) return b; // Valid audio file
+    }
+  } catch (e) {}
+  
+  // Fallback: Google Translate proxy for Oxford/Cambridge
+  if (url.indexOf("oxfordlearnersdictionaries.com") !== -1) {
+    var gtp = "https://www-oxfordlearnersdictionaries-com.translate.goog" + url.replace("https://www.oxfordlearnersdictionaries.com", "") + "?_x_tr_sl=en&_x_tr_tl=fr&_x_tr_hl=en";
     try {
       var ctl = new AbortController();
       var to = setTimeout(function () { ctl.abort(); }, 25000);
-      var r = await fetch(tries[i], { signal: ctl.signal });
+      var r = await fetch(gtp, { signal: ctl.signal });
       clearTimeout(to);
-      if (!r.ok) continue;
-      var b = await r.arrayBuffer();
-      if (b.byteLength > 1000) return b;
+      if (r.ok) {
+        var b = await r.arrayBuffer();
+        if (b.byteLength > 500) return b;
+      }
     } catch (e) {}
   }
+  
+  if (url.indexOf("dictionary.cambridge.org") !== -1) {
+    var cambProxy = "https://dictionary-cambridge-org.translate.goog" + url.replace("https://dictionary.cambridge.org", "") + "?_x_tr_sl=en&_x_tr_tl=fr&_x_tr_hl=en";
+    try {
+      var ctl = new AbortController();
+      var to = setTimeout(function () { ctl.abort(); }, 25000);
+      var r = await fetch(cambProxy, { signal: ctl.signal });
+      clearTimeout(to);
+      if (r.ok) {
+        var b = await r.arrayBuffer();
+        if (b.byteLength > 500) return b;
+      }
+    } catch (e) {}
+  }
+  
   return null;
 }
 async function downloadZip() {
