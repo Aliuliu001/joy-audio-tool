@@ -44,10 +44,6 @@ function syncSpeed(sliderId, valId) {
 }
 document.addEventListener("DOMContentLoaded", function () {
   syncSpeed("speed", "speedVal");
-  syncSpeed("paraSpeed", "paraSpeedVal");
-  syncSpeed("role1Speed", "role1SpeedVal");
-  syncSpeed("role2Speed", "role2SpeedVal");
-  $("paraText").addEventListener("input", detectDialogue);
 });
 
 function switchTab(idx) {
@@ -55,31 +51,6 @@ function switchTab(idx) {
   var contents = document.querySelectorAll(".tab-content");
   tabs.forEach(function (t, i) { t.className = i === idx ? "tab active" : "tab"; });
   contents.forEach(function (c, i) { c.className = i === idx ? "tab-content active" : "tab-content"; });
-}
-
-function detectDialogue() {
-  var txt = $("paraText").value;
-  var lines = txt.split("\n").filter(function (l) { return l.trim(); });
-  var roles = {};
-  var hasDialogue = false;
-  lines.forEach(function (line) {
-    var m = line.match(/^([A-Za-z][A-Za-z0-9\s]*?):\s*(.+)/);
-    if (m && m[2].trim()) { roles[m[1].trim()] = true; hasDialogue = true; }
-  });
-  var roleNames = Object.keys(roles);
-  if (hasDialogue && roleNames.length >= 2) {
-    $("singleMode").classList.remove("active");
-    $("dialogueMode").style.display = "block";
-    $("dialogueMode").classList.add("active");
-    $("role1Name").textContent = roleNames[0];
-    $("role2Name").textContent = roleNames[1];
-    $("role1Label").textContent = roleNames[0] + ":";
-    $("role2Label").textContent = roleNames[1] + ":";
-  } else {
-    $("singleMode").classList.add("active");
-    $("dialogueMode").style.display = "none";
-    $("dialogueMode").classList.remove("active");
-  }
 }
 
 // Preview voice samples (2 files: yn + wh)
@@ -153,12 +124,7 @@ function audioOK(url, ms) {
     a.src = url;
   });
 }
-function googleTTS(word, accent) {
-  var tl = accent === "uk" ? "en-GB" : "en-US";
-  return "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(word) + "&tl=" + tl + "&client=tw-ob";
-}
-
-// ---- StreamElements TTS API for Paragraph/Dialogue (No CORS/WS block, outputs MP3) ----
+// ---- StreamElements TTS API (No CORS block, outputs MP3) ----
 // Map Joy Voice IDs to StreamElements / Amazon Polly voices
 function getSEVoice(voiceId) {
   var map = {
@@ -187,11 +153,13 @@ async function findOne(rawWord, mode) {
   if (!word) return { word: rawWord, ok: false, note: "empty word" };
   var accent = mode === "oxford-us" || /^en-US/i.test(mode) ? "us" : "uk";
   
+  // If user chose a specific TTS voice (not Oxford), generate directly
   if (mode.indexOf("oxford-") !== 0) {
-    var seUrl = seSynthesize(word, mode);
+    var seUrl = seSynthesize(rawWord.trim(), mode);
     return { word: rawWord.trim(), ok: true, url: seUrl, edge: true, note: "generated voice" };
   }
   
+  // Try Oxford dictionary first (single words & common phrases)
   var vs = variants(word);
   for (var i = 0; i < vs.length; i++) {
     var cands = oxfordCandidates(vs[i], accent);
@@ -202,8 +170,10 @@ async function findOne(rawWord, mode) {
     }
   }
   
-  var seUrl2 = seSynthesize(word, accent === "uk" ? "en-GB-SoniaNeural" : "en-US-AriaNeural");
-  return { word: rawWord.trim(), ok: true, url: seUrl2, edge: true, note: "Oxford not found, generated voice" };
+  // Oxford not found → generate with TTS (handles multi-word phrases, compound words)
+  var voiceId = accent === "uk" ? "en-GB-SoniaNeural" : "en-US-AriaNeural";
+  var seUrl = seSynthesize(rawWord.trim(), voiceId);
+  return { word: rawWord.trim(), ok: true, url: seUrl, edge: true, note: "Oxford not found, generated" };
 }
 
 async function startVocab() {
@@ -257,76 +227,6 @@ function renderRow(r, mode) {
   $("list").appendChild(div);
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-
-// ---- Tab 2: Paragraph & Dialogue Generator (StreamElements API -> MP3 Blob for preview & download) ----
-async function generatePara() {
-  var txt = $("paraText").value.trim();
-  if (!txt) { alert("Please enter a paragraph or dialogue."); return; }
-  
-  var isDialogue = $("dialogueMode").classList.contains("active");
-  var btn = document.querySelector("#tab1 button");
-  btn.disabled = true;
-  $("paraDownBtn").disabled = true;
-  $("paraStatus").textContent = "Generating audio (StreamElements API)...";
-  $("paraBar").style.width = "50%";
-  $("paraPreview").innerHTML = "";
-
-  try {
-    var parts = [];
-    if (!isDialogue) {
-      var voice = $("paraVoice").value;
-      var seUrl = seSynthesize(txt, voice);
-      var rb = await fetch(seUrl);
-      if (rb.ok) parts.push(await rb.arrayBuffer());
-    } else {
-      var lines = txt.split("\n").filter(function (l) { return l.trim(); });
-      var role1 = $("role1Name").textContent;
-      var role2 = $("role2Name").textContent;
-      var v1 = $("role1Voice").value;
-      var v2 = $("role2Voice").value;
-
-      for (var i = 0; i < lines.length; i++) {
-        var m = lines[i].match(/^([A-Za-z][A-Za-z0-9\s]*?):\s*(.+)/);
-        if (m && m[2].trim()) {
-          var name = m[1].trim();
-          var sentence = m[2].trim();
-          var v = name === role1 ? v1 : v2;
-          var seUrl = seSynthesize(sentence, v);
-          var rb = await fetch(seUrl);
-          if (rb.ok) parts.push(await rb.arrayBuffer());
-        } else {
-          var seUrl = seSynthesize(lines[i], v1);
-          var rb = await fetch(seUrl);
-          if (rb.ok) parts.push(await rb.arrayBuffer());
-        }
-      }
-    }
-
-    $("paraBar").style.width = "100%";
-    if (parts.length) {
-      var combined = new Blob(parts, { type: "audio/mpeg" });
-      PARA_BLOB = URL.createObjectURL(combined);
-      $("paraStatus").textContent = "Generation complete! Ready to download or play.";
-      $("paraDownBtn").disabled = false;
-      $("paraPreview").innerHTML = '<audio controls autoplay src="' + PARA_BLOB + '" style="width:100%;margin-top:12px"></audio>';
-    } else {
-      $("paraStatus").textContent = "Generation failed.";
-    }
-  } catch (e) {
-    $("paraStatus").textContent = "Error: " + e.message;
-  }
-  btn.disabled = false;
-}
-
-async function downloadPara() {
-  if (!PARA_BLOB) return;
-  var a = document.createElement("a");
-  a.href = PARA_BLOB;
-  a.download = "paragraph-dialogue-audio.mp3";
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(function () { a.remove(); }, 3000);
-}
 
 // ---- Zip Download for Vocabulary ----
 function proxyOf(u) {

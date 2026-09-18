@@ -61,7 +61,6 @@
 <div id="app" style="display:none">
   <div class="tabs">
     <div class="tab active" onclick="switchTab(0)">📚 Vocabulary</div>
-    <div class="tab" onclick="switchTab(1)">📝 Paragraph</div>
   </div>
 
   <!-- TAB 1: Vocabulary -->
@@ -130,86 +129,7 @@
     <div class="card"><div id="list"></div></div>
   </div>
 
-  <!-- TAB 2: Paragraph -->
-  <div class="tab-content" id="tab1">
-    <div class="card">
-      <label>📝 Paste paragraph or dialogue:</label>
-      <textarea id="paraText" placeholder="Paragraph:&#10;Once upon a time...&#10;&#10;Dialogue:&#10;John: Do you like ice cream?&#10;Sarah: Yes, I love it!"></textarea>
 
-      <div class="mode-box active" id="singleMode">
-        <h4>📄 Single voice (entire paragraph)</h4>
-        <select id="paraVoice" style="width:100%;margin-top:8px">
-          <option value="en-GB-SoniaNeural">👩 Sonia (UK)</option>
-          <option value="en-GB-LibbyNeural">👩 Libby (UK)</option>
-          <option value="en-GB-RyanNeural">👨 Ryan (UK)</option>
-          <option value="en-GB-ThomasNeural">👨 Thomas (UK)</option>
-          <option value="en-US-AriaNeural">👩 Aria (US)</option>
-          <option value="en-US-EmmaNeural">👩 Emma (US)</option>
-          <option value="en-US-JennyNeural">👩 Jenny (US)</option>
-          <option value="en-US-GuyNeural">👨 Guy (US)</option>
-          <option value="en-US-ChristopherNeural">👨 Christopher (US)</option>
-        </select>
-        <div class="slider-wrap">
-          <label>🎚️ Speed:</label>
-          <input type="range" id="paraSpeed" min="0.25" max="1.5" step="0.05" value="1">
-          <span class="speed-val" id="paraSpeedVal">1.0×</span>
-        </div>
-      </div>
-
-      <div class="mode-box" id="dialogueMode" style="display:none">
-        <h4>💬 Dialogue (2 roles detected: <span id="role1Name">Role 1</span> & <span id="role2Name">Role 2</span>)</h4>
-        <div class="dialogue-roles">
-          <div>
-            <label><span id="role1Label">Role 1:</span> Voice</label>
-            <select id="role1Voice" style="width:100%">
-              <option value="en-GB-RyanNeural">👨 Ryan (UK)</option>
-              <option value="en-GB-ThomasNeural">👨 Thomas (UK)</option>
-              <option value="en-US-GuyNeural">👨 Guy (US)</option>
-              <option value="en-US-ChristopherNeural">👨 Christopher (US)</option>
-              <option value="en-GB-SoniaNeural">👩 Sonia (UK)</option>
-              <option value="en-GB-LibbyNeural">👩 Libby (UK)</option>
-              <option value="en-US-AriaNeural">👩 Aria (US)</option>
-              <option value="en-US-EmmaNeural">👩 Emma (US)</option>
-              <option value="en-US-JennyNeural">👩 Jenny (US)</option>
-            </select>
-            <div class="slider-wrap">
-              <label>Speed:</label>
-              <input type="range" id="role1Speed" min="0.25" max="1.5" step="0.05" value="1">
-              <span class="speed-val" id="role1SpeedVal">1.0×</span>
-            </div>
-          </div>
-          <div>
-            <label><span id="role2Label">Role 2:</span> Voice</label>
-            <select id="role2Voice" style="width:100%">
-              <option value="en-GB-SoniaNeural">👩 Sonia (UK)</option>
-              <option value="en-GB-LibbyNeural">👩 Libby (UK)</option>
-              <option value="en-US-AriaNeural">👩 Aria (US)</option>
-              <option value="en-US-EmmaNeural">👩 Emma (US)</option>
-              <option value="en-US-JennyNeural">👩 Jenny (US)</option>
-              <option value="en-GB-RyanNeural">👨 Ryan (UK)</option>
-              <option value="en-GB-ThomasNeural">👨 Thomas (UK)</option>
-              <option value="en-US-GuyNeural">👨 Guy (US)</option>
-              <option value="en-US-ChristopherNeural">👨 Christopher (US)</option>
-            </select>
-            <div class="slider-wrap">
-              <label>Speed:</label>
-              <input type="range" id="role2Speed" min="0.25" max="1.5" step="0.05" value="1">
-              <span class="speed-val" id="role2SpeedVal">1.0×</span>
-            </div>
-          </div>
-        </div>
-        <p class="hint" style="margin-top:8px">💡 Tip: Use <b>Name:</b> format (e.g. John:, Sarah:) for automatic role detection</p>
-      </div>
-
-      <div class="row" style="margin-top:16px">
-        <button onclick="generatePara()">▶ Preview</button>
-        <button class="secondary" id="paraDownBtn" onclick="downloadPara()" disabled>⬇ Download mp3</button>
-      </div>
-      <div id="paraProgress"><div id="paraBar" style="height:10px;width:0%;background:var(--green);border-radius:6px"></div></div>
-      <p class="hint" id="paraStatus"></p>
-      <div id="paraPreview"></div>
-    </div>
-  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
