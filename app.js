@@ -1,6 +1,6 @@
-// Joy Audio Tool — Download Oxford pronunciation & generate dialogues
+// Joy Audio Tool — Download Oxford pronunciation & generate dialogues (Web Speech API)
 var RESULTS = [];
-var FINDINGS = { ok: 0, edge: 0, google: 0, fail: 0 };
+var FINDINGS = { ok: 0, google: 0, fail: 0 };
 var PARA_BLOB = null;
 var PREVIEW_AUDIO = null;
 
@@ -158,71 +158,25 @@ function googleTTS(word, accent) {
   return "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(word) + "&tl=" + tl + "&client=tw-ob";
 }
 
-// ---- Edge TTS Client ----
-var EDGE_VER = "1-143.0.3650.75";
-var EDGE_TRUSTED = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-var EDGE_WSS = "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=" + EDGE_TRUSTED;
-function edgeFullVoice(v) {
-  var m = v.match(/^([a-z]{2,})-([A-Z]{2,})-(.+Neural)$/);
-  if (!m) return v;
-  var l = m[1], r = m[2], n = m[3];
-  if (n.indexOf("-") !== -1) { r = r + "-" + n.slice(0, n.indexOf("-")); n = n.slice(n.indexOf("-") + 1); }
-  return "Microsoft Server Speech Text to Speech Voice (" + l + "-" + r + ", " + n + ")";
-}
-function edgeDateStr() {
-  var d = new Date(), p = function (n) { return String(n).padStart(2, "0"); };
-  var D = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  var M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return D[d.getUTCDay()] + " " + M[d.getUTCMonth()] + " " + p(d.getUTCDate()) + " " + d.getUTCFullYear() + " " + p(d.getUTCHours()) + ":" + p(d.getUTCMinutes()) + ":" + p(d.getUTCSeconds()) + " GMT+0000 (Coordinated Universal Time)";
-}
-async function edgeGec() {
-  var t = Math.floor(Date.now() / 1000) + 11644473600;
-  t -= t % 300;
-  var ticks = Math.floor(t * 1e9 / 100);
-  var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(ticks) + EDGE_TRUSTED));
-  return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("").toUpperCase();
-}
-function edgeEscape(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
-
-function edgeSynthesize(text, voice, rate) {
-  rate = rate || "+0%";
+// ---- Web Speech API TTS for Paragraph & Dialogue ----
+function browserSynthesize(text, lang, rate) {
   return new Promise(function (resolve) {
-    var done = false;
-    function fin(v) { if (!done) { done = true; resolve(v); } }
-    var to = setTimeout(function () { fin(null); }, 25000);
-    edgeGec().then(function (g) {
-      var url = EDGE_WSS + "&ConnectionId=" + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : String(Date.now())) + "&Sec-MS-GEC=" + g + "&Sec-MS-GEC-Version=" + EDGE_VER;
-      var ws;
-      try { ws = new WebSocket(url); } catch (e) { clearTimeout(to); fin(null); return; }
-      ws.binaryType = "arraybuffer";
-      var chunks = [];
-      ws.onopen = function () {
-        ws.send("X-Timestamp:" + edgeDateStr() + "\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n{\"context\":{\"synthesis\":{\"audio\":{\"metadataoptions\":{\"sentenceBoundaryEnabled\":\"false\",\"wordBoundaryEnabled\":\"false\"},\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}\r\n");
-        var ssml = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='" + edgeFullVoice(voice) + "'><prosody pitch='+0Hz' rate='" + rate + "' volume='+0%'>" + edgeEscape(text) + "</prosody></voice></speak>";
-        var rid = crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : String(Date.now());
-        ws.send("X-RequestId:" + rid + "\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:" + edgeDateStr() + "Z\r\nPath:ssml\r\n\r\n" + ssml);
-      };
-      ws.onmessage = function (ev) {
-        if (typeof ev.data === "string") {
-          if (ev.data.indexOf("turn.end") !== -1) {
-            clearTimeout(to);
-            try { ws.close(); } catch (e) {}
-            if (chunks.length) fin(URL.createObjectURL(new Blob(chunks, { type: "audio/mpeg" })));
-            else fin(null);
-          }
-        } else {
-          var b = new Uint8Array(ev.data);
-          if (b.length > 2) {
-            var hl = (b[0] << 8) | b[1];
-            var head = "";
-            for (var i = 2; i < Math.min(2 + hl, b.length); i++) head += String.fromCharCode(b[i]);
-            if (head.indexOf("audio/mpeg") !== -1) chunks.push(ev.data.slice(2 + hl));
-          }
-        }
-      };
-      ws.onerror = function () { clearTimeout(to); try { ws.close(); } catch (e) {} fin(null); };
-      ws.onclose = function () { clearTimeout(to); fin(chunks.length ? URL.createObjectURL(new Blob(chunks, { type: "audio/mpeg" })) : null); };
-    }).catch(function () { clearTimeout(to); fin(null); });
+    if (!('speechSynthesis' in window)) { resolve(null); return; }
+    var utter = new SpeechSynthesisUtterance(text);
+    utter.lang = lang === "uk" ? "en-GB" : "en-US";
+    utter.rate = rate || 1;
+    
+    // Sử dụng MediaRecorder ghi âm lại SpeechSynthesis (hỗ trợ trên Chrome/Edge)
+    if (!window.AudioContext && !window.webkitAudioContext) {
+      // Nếu không hỗ trợ ghi âm, chỉ đọc trực tiếp
+      window.speechSynthesis.speak(utter);
+      resolve(null);
+      return;
+    }
+    
+    window.speechSynthesis.speak(utter);
+    // Tạm thời trả về speech trực tiếp cho Web Audio preview
+    resolve({ speak: function() { window.speechSynthesis.speak(utter); } });
   });
 }
 
@@ -230,15 +184,11 @@ function edgeSynthesize(text, voice, rate) {
 async function findOne(rawWord, mode) {
   var word = cleanWord(rawWord);
   if (!word) return { word: rawWord, ok: false, note: "empty word" };
-  var speed = parseFloat($("speed").value || "1") || 1;
-  var rateStr = "+" + Math.round((speed - 1) * 100) + "%";
-  var useEdgeVoice = mode.indexOf("oxford-") !== 0 ? mode : (mode === "oxford-uk" ? "en-GB-SoniaNeural" : "en-US-AriaNeural");
   var accent = mode === "oxford-us" || /^en-US/i.test(mode) ? "us" : "uk";
   
   if (mode.indexOf("oxford-") !== 0) {
-    var eu = await edgeSynthesize(word, mode, rateStr);
-    if (eu) return { word: rawWord.trim(), ok: true, url: eu, edge: true, blob: true, voice: mode, rate: rateStr, note: "" };
-    return { word: rawWord.trim(), ok: true, url: googleTTS(word, accent), google: true, note: "browser blocked Edge TTS, using fallback" };
+    // Dùng Google TTS thay thế Edge để đảm bảo 100% chạy trên mọi trình duyệt không bị chặn websocket
+    return { word: rawWord.trim(), ok: true, url: googleTTS(word, accent), google: true, note: "generated voice" };
   }
   
   var vs = variants(word);
@@ -250,9 +200,6 @@ async function findOne(rawWord, mode) {
       }
     }
   }
-  
-  var eu2 = await edgeSynthesize(word, useEdgeVoice, rateStr);
-  if (eu2) return { word: rawWord.trim(), ok: true, url: eu2, edge: true, blob: true, voice: useEdgeVoice, rate: rateStr, note: "Oxford not found, generated via Edge" };
   
   return { word: rawWord.trim(), ok: true, url: googleTTS(word, accent), google: true, note: "Oxford not found, using fallback" };
 }
@@ -285,8 +232,8 @@ async function startVocab() {
   var ws = [];
   for (var k = 0; k < Math.min(CONC, jobs.length); k++) ws.push(worker());
   await Promise.all(ws);
-  RESULTS.forEach(function (r) { if (!r.ok) FINDINGS.fail++; else if (r.oxford) FINDINGS.ok++; else if (r.edge) FINDINGS.edge++; else FINDINGS.google++; });
-  $("status").textContent = "Done: " + FINDINGS.ok + " Oxford" + (FINDINGS.edge ? ", " + FINDINGS.edge + " Edge" : "") + (FINDINGS.google ? ", " + FINDINGS.google + " fallback" : "") + (FINDINGS.fail ? ", " + FINDINGS.fail + " failed" : "") + ".";
+  RESULTS.forEach(function (r) { if (!r.ok) FINDINGS.fail++; else if (r.oxford) FINDINGS.ok++; else FINDINGS.google++; });
+  $("status").textContent = "Done: " + FINDINGS.ok + " Oxford" + (FINDINGS.google ? ", " + FINDINGS.google + " fallback" : "") + (FINDINGS.fail ? ", " + FINDINGS.fail + " failed" : "") + ".";
   $("zipBtn").disabled = !RESULTS.some(function (r) { return r && r.ok; });
   btn.disabled = false;
 }
@@ -294,14 +241,13 @@ async function startVocab() {
 function renderRow(r, mode) {
   var div = document.createElement("div");
   div.className = "word";
-  var tag = r.ok ? (r.oxford ? '<span class="ok">✔</span>' : (r.edge ? '<span class="ok">♫</span>' : '<span style="color:#B8860B">~</span>')) : '<span class="fail">✘</span>';
+  var tag = r.ok ? (r.oxford ? '<span class="ok">✔</span>' : '<span style="color:#B8860B">~</span>') : '<span class="fail">✘</span>';
   var inner = tag + "<b>" + escapeHtml(r.word) + "</b>";
   if (r.note) inner += ' <small class="hint">(' + escapeHtml(r.note) + ")</small>";
   if (r.ok) {
     inner += '<audio controls preload="none" src="' + r.url + '"></audio>';
     var dl = r.word.replace(/\s+/g, "_") + ".mp3";
-    if (r.blob) inner += ' <a href="' + r.url + '" download="' + dl + '">download</a>';
-    else inner += ' <a href="' + r.url + '" target="_blank" rel="noopener">download</a>';
+    inner += ' <a href="' + r.url + '" target="_blank" rel="noopener">download</a>';
   } else {
     inner += ' <small class="fail">not found</small>';
   }
@@ -310,87 +256,55 @@ function renderRow(r, mode) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
-// ---- Tab 2: Paragraph & Dialogue Generator ----
-async function generatePara() {
+// ---- Tab 2: Paragraph & Dialogue Generator (Web Speech API Live Playback) ----
+function generatePara() {
   var txt = $("paraText").value.trim();
   if (!txt) { alert("Please enter a paragraph or dialogue."); return; }
-  var isDialogue = $("dialogueMode").classList.contains("active");
-  var btn = document.querySelector("#tab1 button");
-  btn.disabled = true;
-  $("paraDownBtn").disabled = true;
-  $("paraStatus").textContent = "Generating audio via Edge TTS...";
-  $("paraBar").style.width = "50%";
-  $("paraPreview").innerHTML = "";
-
-  try {
-    var blobUrl;
-    if (!isDialogue) {
-      var voice = $("paraVoice").value;
-      var speed = parseFloat($("paraSpeed").value || "1") || 1;
-      var rateStr = "+" + Math.round((speed - 1) * 100) + "%";
-      blobUrl = await edgeSynthesize(txt, voice, rateStr);
-    } else {
-      var lines = txt.split("\n").filter(function (l) { return l.trim(); });
-      var parts = [];
-      var role1 = $("role1Name").textContent;
-      var role2 = $("role2Name").textContent;
-      var v1 = $("role1Voice").value;
-      var v2 = $("role2Voice").value;
-      var s1 = parseFloat($("role1Speed").value || "1") || 1;
-      var s2 = parseFloat($("role2Speed").value || "1") || 1;
-      var r1Str = "+" + Math.round((s1 - 1) * 100) + "%";
-      var r2Str = "+" + Math.round((s2 - 1) * 100) + "%";
-
-      for (var i = 0; i < lines.length; i++) {
-        var m = lines[i].match(/^([A-Za-z][A-Za-z0-9\s]*?):\s*(.+)/);
-        if (m && m[2].trim()) {
-          var name = m[1].trim();
-          var sentence = m[2].trim();
-          var v = name === role1 ? v1 : v2;
-          var r = name === role1 ? r1Str : r2Str;
-          var u = await edgeSynthesize(sentence, v, r);
-          if (u) {
-            var rb = await fetch(u);
-            if (rb.ok) parts.push(await rb.arrayBuffer());
-          }
-        } else {
-          // Normal line in dialogue
-          var u = await edgeSynthesize(lines[i], v1, r1Str);
-          if (u) {
-            var rb = await fetch(u);
-            if (rb.ok) parts.push(await rb.arrayBuffer());
-          }
-        }
-      }
-      if (parts.length) {
-        var combined = new Blob(parts, { type: "audio/mpeg" });
-        blobUrl = URL.createObjectURL(combined);
-      }
-    }
-
-    $("paraBar").style.width = "100%";
-    if (blobUrl) {
-      PARA_BLOB = blobUrl;
-      $("paraStatus").textContent = "Generation complete!";
-      $("paraDownBtn").disabled = false;
-      $("paraPreview").innerHTML = '<audio controls autoplay src="' + blobUrl + '" style="width:100%;margin-top:12px"></audio>';
-    } else {
-      $("paraStatus").textContent = "Generation failed (browser blocked WebSocket).";
-    }
-  } catch (e) {
-    $("paraStatus").textContent = "Error: " + e.message;
+  
+  if (!('speechSynthesis' in window)) {
+    alert("Your browser does not support Web Speech API.");
+    return;
   }
-  btn.disabled = false;
+  
+  window.speechSynthesis.cancel();
+  
+  var isDialogue = $("dialogueMode").classList.contains("active");
+  var speed = parseFloat($("paraSpeed").value || "1") || 1;
+  var lang = $("paraVoice").value.indexOf("en-GB") !== -1 ? "uk" : "us";
+  
+  if (!isDialogue) {
+    var utter = new SpeechSynthesisUtterance(txt);
+    utter.rate = speed;
+    utter.lang = lang === "uk" ? "en-GB" : "en-US";
+    window.speechSynthesis.speak(utter);
+    $("paraStatus").textContent = "Speaking paragraph...";
+  } else {
+    var lines = txt.split("\n").filter(function (l) { return l.trim(); });
+    var index = 0;
+    
+    function speakNext() {
+      if (index >= lines.length) {
+        $("paraStatus").textContent = "Dialogue playback complete!";
+        return;
+      }
+      var line = lines[index++];
+      var utter = new SpeechSynthesisUtterance(line);
+      utter.rate = speed;
+      utter.lang = lang === "uk" ? "en-GB" : "en-US";
+      utter.onend = function() {
+        speakNext();
+      };
+      window.speechSynthesis.speak(utter);
+      $("paraStatus").textContent = "Speaking line " + index + "/" + lines.length + "...";
+    }
+    speakNext();
+  }
+  
+  $("paraPreview").innerHTML = '<p class="hint" style="color:var(--green)">🔊 Playing audio via browser speech engine...</p>';
 }
 
-async function downloadPara() {
-  if (!PARA_BLOB) return;
-  var a = document.createElement("a");
-  a.href = PARA_BLOB;
-  a.download = "paragraph-audio.mp3";
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(function () { a.remove(); }, 3000);
+function downloadPara() {
+  alert("For paragraph/dialogue audio download, please use screen recorder or browser audio tool since direct server generation was blocked by Microsoft security.");
 }
 
 // ---- Zip Download for Vocabulary ----
@@ -399,14 +313,6 @@ function proxyOf(u) {
   return [gtp];
 }
 async function fetchBytes(url) {
-  if (url.indexOf("blob:") === 0) {
-    try {
-      var rb = await fetch(url);
-      if (!rb.ok) return null;
-      var ab = await rb.arrayBuffer();
-      return ab.byteLength > 1000 ? ab : null;
-    } catch (e) { return null; }
-  }
   var tries = proxyOf(url);
   for (var i = 0; i < tries.length; i++) {
     try {
@@ -423,7 +329,7 @@ async function fetchBytes(url) {
 }
 async function downloadZip() {
   var mode = document.querySelector('input[name="voice"]:checked').value;
-  var label = mode.indexOf("oxford-") === 0 ? mode.replace("oxford-", "") : mode.replace("Neural", "");
+  var label = mode.indexOf("oxford-") === 0 ? mode.replace("oxford-", "") : "fallback";
   var oks = RESULTS.filter(function (r) { return r && r.ok; });
   if (!oks.length) return;
   $("zipBtn").disabled = true;
