@@ -191,7 +191,9 @@ async function findOne(rawWord, accent, source) {
 }
 
 async function startVocab() {
-  var lines = $("words").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
+  var rawInput = $("words").value;
+  // Split by newlines first, then also split by comma/semicolon
+  var lines = rawInput.split(/[\n,;]/).map(function (s) { return s.trim(); }).filter(Boolean);
   if (!lines.length) { alert("Please enter words in the box first."); return; }
   var accent = document.querySelector('input[name="accent"]:checked').value;
   var btn = document.querySelector("#tab0 button");
@@ -276,7 +278,7 @@ async function searchCambridge() {
   
   // Alert if still have failed words after Cambridge
   if (failedWords.length > 0) {
-    alert("⚠️ " + failedWords.length + " words not found in both Oxford and Cambridge:\n\n" + failedWords.join(", "));
+    alert("⚠️ " + failedWords.length + " words not found in both Oxford and Cambridge:\n\n" + failedWords.join("\n"));
   }
 }
 
