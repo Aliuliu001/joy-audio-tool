@@ -213,7 +213,7 @@ async function startVocab() {
       done++;
       $("bar").style.width = Math.round(done / lines.length * 100) + "%";
       $("status").textContent = "Processed " + done + "/" + lines.length + "...";
-      renderRow(r, mode);
+      renderRow(r);
     }
   }
   var ws = [];
@@ -275,7 +275,7 @@ async function searchCambridge() {
   btn.disabled = failedWords.length === 0;
 }
 
-function renderRow(r, mode) {
+function renderRow(r) {
   var div = document.createElement("div");
   div.className = "word";
   div.id = "word-" + RESULTS.indexOf(r);
