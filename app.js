@@ -136,37 +136,29 @@ function googleTTS(text, voiceId) {
 }
 
 // ---- Tab 1: Vocabulary Search ----
-async function findOne(rawWord, mode) {
+async function findOne(rawWord, accent) {
   var word = cleanWord(rawWord);
   if (!word) return { word: rawWord, ok: false, note: "empty word" };
-  var accent = mode === "oxford-us" || /^en-US/i.test(mode) ? "us" : "uk";
   
-  // If user chose a specific TTS voice (not Oxford), generate directly with Google TTS
-  if (mode.indexOf("oxford-") !== 0) {
-    var gUrl = googleTTS(rawWord.trim(), mode);
-    return { word: rawWord.trim(), ok: true, url: gUrl, edge: true, note: "generated voice" };
-  }
-  
-  // Try Oxford dictionary first (single words & common phrases)
+  // Try Oxford dictionary only (single words & common phrases)
   var vs = variants(word);
   for (var i = 0; i < vs.length; i++) {
     var cands = oxfordCandidates(vs[i], accent);
     for (var j = 0; j < cands.length; j++) {
       if (await audioOK(cands[j])) {
-        return { word: rawWord.trim(), ok: true, url: cands[j], oxford: true, note: vs[i] !== word ? "from “" + vs[i] + "”" : "" };
+        return { word: rawWord.trim(), ok: true, url: cands[j], oxford: true, note: vs[i] !== word ? "from \"" + vs[i] + "\"" : "" };
       }
     }
   }
   
-  // Oxford not found → generate with Google TTS (handles multi-word phrases, compound words)
-  var gUrl = googleTTS(rawWord.trim(), mode);
-  return { word: rawWord.trim(), ok: true, url: gUrl, edge: true, note: "Oxford not found, generated" };
+  // Oxford not found → fail
+  return { word: rawWord.trim(), ok: false, note: "not found in Oxford" };
 }
 
 async function startVocab() {
   var lines = $("words").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
   if (!lines.length) { alert("Please enter words in the box first."); return; }
-  var mode = document.querySelector('input[name="voice"]:checked').value;
+  var accent = document.querySelector('input[name="accent"]:checked').value;
   var btn = document.querySelector("#tab0 button");
   btn.disabled = true;
   $("zipBtn").disabled = true;
@@ -175,7 +167,7 @@ async function startVocab() {
   RESULTS = [];
   FINDINGS = { ok: 0, edge: 0, google: 0, fail: 0 };
   var done = 0;
-  var jobs = lines.map(function (w) { return function () { return findOne(w, mode); }; });
+  var jobs = lines.map(function (w) { return function () { return findOne(w, accent); }; });
   var CONC = 6, idx = 0;
   async function worker() {
     while (idx < jobs.length) {
@@ -191,8 +183,9 @@ async function startVocab() {
   var ws = [];
   for (var k = 0; k < Math.min(CONC, jobs.length); k++) ws.push(worker());
   await Promise.all(ws);
-  RESULTS.forEach(function (r) { if (!r.ok) FINDINGS.fail++; else if (r.oxford) FINDINGS.ok++; else FINDINGS.edge++; });
-  $("status").textContent = "Done: " + FINDINGS.ok + " Oxford" + (FINDINGS.edge ? ", " + FINDINGS.edge + " generated" : "") + (FINDINGS.fail ? ", " + FINDINGS.fail + " failed" : "") + ".";
+  RESULTS.forEach(function (r) { if (!r.ok) FINDINGS.fail++; else if (r.oxford) FINDINGS.ok++; });
+  var failedWords = RESULTS.filter(function (r) { return !r.ok; }).map(function (r) { return r.word; });
+  $("status").textContent = "Done: " + FINDINGS.ok + " found in Oxford" + (FINDINGS.fail ? ", " + FINDINGS.fail + " not found: " + failedWords.join(", ") : "") + ".";
   $("zipBtn").disabled = !RESULTS.some(function (r) { return r && r.ok; });
   btn.disabled = false;
 }
@@ -200,7 +193,7 @@ async function startVocab() {
 function renderRow(r, mode) {
   var div = document.createElement("div");
   div.className = "word";
-  var tag = r.ok ? (r.oxford ? '<span class="ok">✔</span>' : '<span class="ok">♫</span>') : '<span class="fail">✘</span>';
+  var tag = r.ok ? '<span class="ok">✔</span>' : '<span class="fail">✘</span>';
   var inner = tag + "<b>" + escapeHtml(r.word) + "</b>";
   if (r.note) inner += ' <small class="hint">(' + escapeHtml(r.note) + ")</small>";
   if (r.ok) {
@@ -243,8 +236,8 @@ async function fetchBytes(url) {
   return null;
 }
 async function downloadZip() {
-  var mode = document.querySelector('input[name="voice"]:checked').value;
-  var label = mode.indexOf("oxford-") === 0 ? mode.replace("oxford-", "") : "generated";
+  var accent = document.querySelector('input[name="accent"]:checked').value;
+  var label = accent === "us" ? "us" : "uk";
   var oks = RESULTS.filter(function (r) { return r && r.ok; });
   if (!oks.length) return;
   $("zipBtn").disabled = true;

@@ -69,54 +69,16 @@
       <label>📝 Word list (one word or phrase per line):</label>
       <textarea id="words" placeholder="anchor&#10;grow into&#10;photosynthesis"></textarea>
       
-      <label>🗣️ Voice for non-Oxford words/phrases:</label>
-      <div class="cols2">
-        <div class="voice-group">
-          <h4>🇬🇧 UK</h4>
-          <div class="voice-list">
-            <label><input type="radio" name="voice" value="oxford-uk" checked> 📕 Oxford UK (fallback: Edge)</label>
-            <label><input type="radio" name="voice" value="en-GB-SoniaNeural"> 👩 Sonia</label>
-            <label><input type="radio" name="voice" value="en-GB-LibbyNeural"> 👩 Libby</label>
-            <label><input type="radio" name="voice" value="en-GB-RyanNeural"> 👨 Ryan</label>
-            <label><input type="radio" name="voice" value="en-GB-ThomasNeural"> 👨 Thomas</label>
-          </div>
-        </div>
-        <div class="voice-group">
-          <h4>🇺🇸 US</h4>
-          <div class="voice-list">
-            <label><input type="radio" name="voice" value="oxford-us"> 📕 Oxford US (fallback: Edge)</label>
-            <label><input type="radio" name="voice" value="en-US-AriaNeural"> 👩 Aria</label>
-            <label><input type="radio" name="voice" value="en-US-EmmaNeural"> 👩 Emma</label>
-            <label><input type="radio" name="voice" value="en-US-JennyNeural"> 👩 Jenny</label>
-            <label><input type="radio" name="voice" value="en-US-GuyNeural"> 👨 Guy</label>
-            <label><input type="radio" name="voice" value="en-US-ChristopherNeural"> 👨 Christopher</label>
-          </div>
-        </div>
-      </div>
-
-      <div class="slider-wrap">
-        <label>🎚️ Speed:</label>
-        <input type="range" id="speed" min="0.25" max="1.5" step="0.05" value="1">
-        <span class="speed-val" id="speedVal">1.0×</span>
-      </div>
-
-      <p class="hint">🎧 Preview 9 voices (Yes/No + Wh-question intonation):</p>
-      <div class="cols2">
-        <div>
-          <b>🇬🇧 UK:</b><br>
-          <button type="button" class="secondary" onclick="playPreview('nu-UK-sonia',this)">👩 Sonia</button>
-          <button type="button" class="secondary" onclick="playPreview('nu-UK-libby',this)">👩 Libby</button>
-          <button type="button" class="secondary" onclick="playPreview('nam-UK-ryan',this)">👨 Ryan</button>
-          <button type="button" class="secondary" onclick="playPreview('nam-UK-thomas',this)">👨 Thomas</button>
-        </div>
-        <div>
-          <b>🇺🇸 US:</b><br>
-          <button type="button" class="secondary" onclick="playPreview('nu-US-aria',this)">👩 Aria</button>
-          <button type="button" class="secondary" onclick="playPreview('nu-US-emma',this)">👩 Emma</button>
-          <button type="button" class="secondary" onclick="playPreview('nu-US-jenny',this)">👩 Jenny</button>
-          <button type="button" class="secondary" onclick="playPreview('nam-US-guy',this)">👨 Guy</button>
-          <button type="button" class="secondary" onclick="playPreview('nam-US-christopher',this)">👨 Christopher</button>
-        </div>
+      <label>🔍 Choose accent:</label>
+      <div class="row" style="gap:12px;margin:12px 0">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="radio" name="accent" value="uk" checked style="width:20px;height:20px">
+          <span style="font-size:18px">🇬🇧 Oxford UK</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="radio" name="accent" value="us" style="width:20px;height:20px">
+          <span style="font-size:18px">🇺🇸 Oxford US</span>
+        </label>
       </div>
 
       <div class="row" style="margin-top:16px">
