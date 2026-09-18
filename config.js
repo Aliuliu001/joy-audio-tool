@@ -15,3 +15,7 @@ window.MONTH_CODES = {
   "2027-07": "425767",
   "2027-08": "485915"
 };
+
+// Cloudflare Worker URL for bulk ZIP downloads. See README.md for deployment.
+// Example: "https://joy-audio-proxy.<your-subdomain>.workers.dev"
+window.AUDIO_PROXY_URL = "https://joy-audio-tool.tuanhuytruong13.workers.dev/";

@@ -3,17 +3,6 @@ var RESULTS = [];
 var FINDINGS = { ok: 0, edge: 0, google: 0, fail: 0 };
 var PARA_BLOB = null;
 var PREVIEW_AUDIO = null;
-var SW_READY = false;
-
-// Register Service Worker for CORS bypass
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').then(function(reg) {
-    console.log('Service Worker registered');
-    SW_READY = true;
-  }).catch(function(err) {
-    console.log('Service Worker registration failed:', err);
-  });
-}
 
 function $(id) { return document.getElementById(id); }
 
@@ -305,94 +294,74 @@ function updateRow(idx, r) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
-// ---- Zip Download for Vocabulary ----
-async function fetchBytes(url) {
-  // If Service Worker is ready, use it to bypass CORS
-  if (SW_READY && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const buffer = await response.arrayBuffer();
-        if (buffer.byteLength > 500) return buffer;
-      }
-    } catch (e) {
-      console.log('SW fetch failed:', e);
-    }
-  }
-  
-  // Fallback: try direct fetch
-  try {
-    var r = await fetch(url);
-    if (r.ok) {
-      var b = await r.arrayBuffer();
-      if (b.byteLength > 500) return b;
-    }
-  } catch (e) {}
-  
-  // Fallback: Google Translate proxy for Oxford/Cambridge
-  if (url.indexOf("oxfordlearnersdictionaries.com") !== -1) {
-    var gtp = "https://www-oxfordlearnersdictionaries-com.translate.goog" + url.replace("https://www.oxfordlearnersdictionaries.com", "") + "?_x_tr_sl=en&_x_tr_tl=fr&_x_tr_hl=en";
-    try {
-      var ctl = new AbortController();
-      var to = setTimeout(function () { ctl.abort(); }, 25000);
-      var r = await fetch(gtp, { signal: ctl.signal });
-      clearTimeout(to);
-      if (r.ok) {
-        var b = await r.arrayBuffer();
-        if (b.byteLength > 500) return b;
-      }
-    } catch (e) {}
-  }
-  
-  if (url.indexOf("dictionary.cambridge.org") !== -1) {
-    var cambProxy = "https://dictionary-cambridge-org.translate.goog" + url.replace("https://dictionary.cambridge.org", "") + "?_x_tr_sl=en&_x_tr_tl=fr&_x_tr_hl=en";
-    try {
-      var ctl = new AbortController();
-      var to = setTimeout(function () { ctl.abort(); }, 25000);
-      var r = await fetch(cambProxy, { signal: ctl.signal });
-      clearTimeout(to);
-      if (r.ok) {
-        var b = await r.arrayBuffer();
-        if (b.byteLength > 500) return b;
-      }
-    } catch (e) {}
-  }
-  
-  return null;
+// ---- ZIP download through the configured CORS proxy ----
+function buildProxyUrl(proxyUrl, sourceUrl) {
+  var separator = proxyUrl.indexOf("?") === -1 ? "?" : "&";
+  return proxyUrl + separator + "url=" + encodeURIComponent(sourceUrl);
 }
+
+async function fetchBytes(url) {
+  var proxyUrl = window.AUDIO_PROXY_URL;
+  if (!proxyUrl) return null;
+  try {
+    var controller = new AbortController();
+    var timeout = setTimeout(function () { controller.abort(); }, 25000);
+    var response = await fetch(buildProxyUrl(proxyUrl, url), { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) return null;
+    var buffer = await response.arrayBuffer();
+    return buffer.byteLength > 500 ? buffer : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 async function downloadZip() {
   var accent = document.querySelector('input[name="accent"]:checked').value;
   var label = accent === "us" ? "us" : "uk";
   var oks = RESULTS.filter(function (r) { return r && r.ok; });
   if (!oks.length) return;
+  if (!window.AUDIO_PROXY_URL) {
+    $("status").textContent = "Bulk download needs the audio proxy URL in config.js. Individual download links still work.";
+    return;
+  }
+
   $("zipBtn").disabled = true;
   $("status").textContent = "Gathering files into zip...";
   var zip = new JSZip();
-  var missing = [], di = 0;
+  var missing = [];
   for (var i = 0; i < oks.length; i++) {
-    var r = oks[i];
-    var buf = await fetchBytes(r.url);
-    di++;
-    $("status").textContent = "Gathering " + di + "/" + oks.length + "...";
-    if (buf) {
-      var fname = r.word.replace(/\s+/g, "_") + "_" + label + ".mp3";
-      zip.file(fname, buf);
-    } else missing.push(r.word);
+    var result = oks[i];
+    var bytes = await fetchBytes(result.url);
+    $("status").textContent = "Gathering " + (i + 1) + "/" + oks.length + "...";
+    if (bytes) {
+      zip.file(result.word.replace(/\s+/g, "_") + "_" + label + ".mp3", bytes);
+    } else {
+      missing.push(result.word);
+    }
   }
+
   if (!Object.keys(zip.files).length) {
-    $("status").textContent = "Network blocked bulk download. Please use individual 'download' links.";
+    $("status").textContent = "The audio proxy could not retrieve any files. Individual download links still work.";
     $("zipBtn").disabled = false;
     return;
   }
+
   var blob = await zip.generateAsync({ type: "blob" });
-  var a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "pronunciation-" + label.toLowerCase() + ".zip";
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+  var link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "pronunciation-" + label + ".zip";
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(function () { URL.revokeObjectURL(link.href); link.remove(); }, 3000);
   $("status").textContent = missing.length
-    ? "Zip downloaded (missing " + missing.length + " words: " + missing.join(", ") + " — use individual download links)."
+    ? "Zip downloaded (missing " + missing.length + " words: " + missing.join(", ") + ")."
     : "Successfully downloaded all " + oks.length + " files in a zip.";
   $("zipBtn").disabled = false;
+}
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    buildProxyUrl: buildProxyUrl
+  };
 }
